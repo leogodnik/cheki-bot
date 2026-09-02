@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import checks
 import feed
+import sheet
 import state
 import web
 
@@ -238,6 +239,24 @@ verdict = checks.review(dict(clean, doubts="время не видно"), catego
 check("сомнения агента доходят до человека",
       verdict["warnings"] == ["время не видно"])
 check("но сами по себе статуса не меняют", verdict["status"] == "готово")
+
+print()
+print("sheet.categories() — молчащая таблица не выдаётся за пустой лист")
+
+# Порт 1 на localhost: слушать там некому и не станет, отказ приходит сразу,
+# без ожидания TIMEOUT и без обращения к настоящей сети. Так же выглядела бы
+# для requests любая недоступная таблица.
+unreachable = "http://127.0.0.1:1/"
+
+blank = {"categories": [], "categories_at": 0}
+found, source = sheet.categories(blank, unreachable, "секрет")
+check("пустой запас и недостижимый адрес — источник «молчит», а не «нет»",
+      found == [] and source == "молчит")
+
+stocked = {"categories": ["Продукты", "Топливо"], "categories_at": 0}
+found, source = sheet.categories(stocked, unreachable, "секрет")
+check("запас на месте — недостижимый адрес по-прежнему отдаёт «запас»",
+      found == ["Продукты", "Топливо"] and source == "запас")
 
 print()
 print("копия мозга агента")

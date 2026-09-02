@@ -159,12 +159,13 @@ def photo(st, jobs, upload, author):
 
 def start(jobs, job, mine):
     """Кладёт задание в очередь и рождает два события: реплику человека и
-    плашку «Смотрю чек…».
+    плашку «Смотрю чек…» (или «Разбираю…» — по виду задания).
 
     Ответ придёт отдельным событием через 15–50 секунд — держать на нём
     HTTP-запрос нельзя, браузер оборвёт его раньше."""
     job["task"] = uuid4().hex[:8]
-    born = [feed.add(mine), feed.add({"kind": "работа", "task": job["task"]})]
+    born = [feed.add(mine), feed.add({"kind": "работа", "task": job["task"],
+                                      "job": job["kind"]})]
     jobs.put(job)
     return born
 
