@@ -209,6 +209,20 @@ body.fixed { height: 100vh; height: 100dvh; overflow: hidden; }
 .b .hdr em { font-style: normal; color: var(--hot); }
 .b .sub { padding-left: 24px; margin-top: 4px; color: var(--mid); font-size: 13.5px; }
 .b .sub em { font-style: normal; color: var(--hot); }
+
+/* Номер строки — ссылка на неё же в таблице: открывает лист «Расходы» и ставит
+   курсор на эту строку. Подчёркивание бледное и наливается на наведении: таких
+   номеров в ленте столько же, сколько трат, и в полную силу они превратили бы
+   её в частокол. Без адреса таблицы ссылка остаётся без href — тогда правило
+   не срабатывает, и это по-прежнему обычный текст. */
+.b em a[href] {
+  color: inherit; cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--hot) 35%, transparent);
+  text-underline-offset: 2px;
+  transition: text-decoration-color .12s ease;
+}
+.b em a[href]:hover { text-decoration-color: currentColor; }
 .b .src { padding-left: 24px; color: var(--dim); font-size: 12.5px; margin-bottom: 2px; }
 .b .warn { background: var(--warn-bg); color: var(--warn-tx); border-radius: 4px; padding: 1px 5px; }
 .b .run { color: var(--mid); font-style: italic; }
