@@ -254,21 +254,30 @@ def telegram_loop(env, st, jobs):
 
 def main():
     env = config.load_env()
-    config.refuse_if_api_key()
     st = memory.load()
     jobs = queue.Queue()
+    blocked = "api-key" if config.api_key_in_env() else ""
 
-    threading.Thread(target=worker, args=(env, st, jobs), daemon=True).start()
-    threading.Thread(target=telegram_loop, args=(env, st, jobs),
-                     daemon=True).start()
+    if blocked:
+        print(config.BLOCKED_TEXT)
+        print()
+    else:
+        threading.Thread(target=worker, args=(env, st, jobs), daemon=True).start()
+        if env["bot_token"]:
+            threading.Thread(target=telegram_loop, args=(env, st, jobs),
+                             daemon=True).start()
+        else:
+            # Это не поломка, а обычный способ работать: чеки принимает
+            # браузер. Телеграм подключается в срезе 5, кнопкой.
+            print("Телеграм не подключён — работаем через браузер.")
 
     web.quiet()
     port = web.choose_port()
     print(f"Рабочее место: http://127.0.0.1:{port}")
     print("Ctrl+C — выход.")
     try:
-        web.create(env, st, jobs).run(host="127.0.0.1", port=port,
-                                      threaded=True, use_reloader=False)
+        web.create(env, st, jobs, blocked).run(host="127.0.0.1", port=port,
+                                               threaded=True, use_reloader=False)
     except KeyboardInterrupt:
         print("\nОстанавливаюсь.")
 

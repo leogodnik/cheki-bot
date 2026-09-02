@@ -54,6 +54,12 @@ def create(env, st, jobs, blocked=""):
         Отказы возвращаются не кодом ошибки, а событием ленты: у человека
         один список того, что произошло, и отказ — такая же его строка,
         как запись."""
+        if blocked:
+            return jsonify(published([feed.add({
+                "kind": "слово", "text": "Бот не запущен.",
+                "note": "Уберите ANTHROPIC_API_KEY из окружения и запустите заново.",
+            })]))
+
         settings = config.load_settings()
         author = owner_name(settings)
 

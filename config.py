@@ -22,7 +22,9 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = BASE_DIR / "settings.json"
 
-REQUIRED_ENV = ("BOT_TOKEN", "SHEET_URL", "SHEET_SECRET")
+# Телеграм необязателен: рабочее место в браузере работает без него. Без
+# таблицы бот бессмыслен — писать будет некуда.
+REQUIRED_ENV = ("SHEET_URL", "SHEET_SECRET")
 
 # Пустой белый список — безопасное состояние: бот не отвечает никому.
 DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": ""}
@@ -38,23 +40,29 @@ def load_env():
             "Возьмите образец: cp .env.example .env"
         )
     return {
-        "bot_token": os.environ["BOT_TOKEN"],
+        "bot_token": os.getenv("BOT_TOKEN", "").strip(),
         "sheet_url": os.environ["SHEET_URL"],
         "sheet_secret": os.environ["SHEET_SECRET"],
         "sheet_link": os.getenv("SHEET_LINK", ""),
     }
 
 
-def refuse_if_api_key():
-    """Ключ API в окружении уводит Claude Code с подписки на поминутную оплату,
-    и человек узнаёт об этом из счёта. Лучше не запуститься."""
-    if os.getenv("ANTHROPIC_API_KEY"):
-        sys.exit(
-            "В окружении задан ANTHROPIC_API_KEY.\n"
-            "С ним Claude Code пойдёт по счётчику мимо подписки.\n"
-            "Уберите строку с ANTHROPIC_API_KEY из ~/.zshrc, закройте терминал,\n"
-            "откройте заново и запустите бота ещё раз."
-        )
+def api_key_in_env():
+    """Ключ API в окружении уводит Claude Code с подписки на поминутную
+    оплату, и человек узнаёт об этом из счёта.
+
+    Раньше бот на этом просто выходил. Теперь он поднимает рабочее место и
+    ничего не разбирает: объяснить на странице надёжнее, чем строкой в
+    терминале, которую человек закрыл вместе с окном."""
+    return bool(os.getenv("ANTHROPIC_API_KEY"))
+
+
+BLOCKED_TEXT = (
+    "В окружении задан ANTHROPIC_API_KEY.\n"
+    "С ним Claude Code пойдёт по счётчику мимо подписки, поэтому чеки я не разбираю.\n"
+    "Уберите строку с ANTHROPIC_API_KEY из ~/.zshrc, закройте терминал,\n"
+    "откройте заново и запустите бота ещё раз."
+)
 
 
 def load_settings():
@@ -91,7 +99,8 @@ def allowed_ids(settings):
 
 if __name__ == "__main__":
     env = load_env()
-    refuse_if_api_key()
+    if api_key_in_env():
+        print(BLOCKED_TEXT)
     settings = load_settings()
     print("токен бота:", env["bot_token"][:8] + "…")
     print("адрес таблицы:", env["sheet_url"])
