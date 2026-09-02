@@ -10,6 +10,7 @@
 import logging
 import socket
 import sys
+from pathlib import Path
 from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
@@ -20,6 +21,11 @@ import intake
 
 FIRST_PORT = 8765
 LAST_PORT = 8775
+
+# Больше десяти мегабайт фотография чека не весит. Отказ до вызова агента:
+# держать движок 50 секунд ради заведомо чужого файла незачем.
+MAX_FILE = 10 * 1024 * 1024
+PICTURES = (".jpg", ".jpeg", ".png")
 
 
 def create(env, st, jobs, blocked=""):
@@ -50,6 +56,10 @@ def create(env, st, jobs, blocked=""):
         settings = config.load_settings()
         author = owner_name(settings)
 
+        upload = request.files.get("file")
+        if upload and upload.filename:
+            return jsonify(published(photo(st, jobs, upload, author)))
+
         text = (request.form.get("text") or "").strip()
         if not text:
             return jsonify(published([feed.add({
@@ -76,6 +86,43 @@ def published(events):
     Номер последнего события отдаётся вместе с ними, чтобы страница не
     показала эти же события второй раз следующим опросом."""
     return {"events": events, "last": events[-1]["id"] if events else 0}
+
+
+def photo(st, jobs, upload, author):
+    """Фотография из браузера: проверить, поймать повтор, положить в очередь.
+
+    Дедупликация в браузере устроена не так, как в телеграме: там файл
+    опознаёт сам Bot API по file_unique_id, здесь такого нет — считаем хеш
+    содержимого. Считаем до того, как файл лёг на диск: повтор не должен
+    плодить копии в чеки/входящие/."""
+    name = upload.filename
+    mine = {"kind": "мой", "file": name}
+
+    if Path(name).suffix.lower() not in PICTURES:
+        return [feed.add(mine), feed.add({
+            "kind": "слово", "text": "Это не фотография чека.",
+            "note": "Перетащите файл JPG или PNG.",
+        })]
+
+    data = upload.read(MAX_FILE + 1)
+    if len(data) > MAX_FILE:
+        return [feed.add(mine), feed.add({
+            "kind": "слово", "text": "Файл больше 10 МБ.",
+            "note": "Уменьшите фотографию и пришлите ещё раз.",
+        })]
+
+    mark = intake.fingerprint(data)
+    old = intake.duplicate(st, mark)
+    if old:
+        return [feed.add(mine), feed.add({
+            "kind": "слово", "text": "Этот чек уже записан.",
+            "row": old.get("row"), "note": intake.when(old),
+        })]
+
+    path = intake.save_photo(data, author, Path(name).suffix.lower())
+    job = {"kind": "фото", "payload": str(path), "channel": "браузер",
+           "author": author, "chat_id": None, "file": path.name, "mark": mark}
+    return start(jobs, job, mine)
 
 
 def start(jobs, job, mine):
