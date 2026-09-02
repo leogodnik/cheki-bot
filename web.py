@@ -34,6 +34,9 @@ PICTURES = (".jpg", ".jpeg", ".png")
 def create(env, st, jobs, blocked=""):
     """Приложение Flask. env и st — те же словари, с которыми живёт бот."""
     app = Flask(__name__)
+    # Правки в шаблонах должны быть видны после обновления страницы,
+    # а не после перезапуска бота.
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     @app.get("/")
     def page():
