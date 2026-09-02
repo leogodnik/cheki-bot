@@ -120,6 +120,18 @@ def accept(env, st, job):
     if job.get("mark"):
         memory.remember(st, job["mark"], number)
 
+    # Запомнили, что записали последним: из этого потом делается правка.
+    # Помним и строку, не доехавшую до таблицы (number is None) — иначе
+    # «не 450, а 480» уехало бы в предыдущую, давно записанную строку.
+    memory.remember_last(st, memory.address(job["channel"], job["author"]), {
+        "row": number,
+        "fields": row,
+        # Канал и автор лежат здесь не для адресации — адрес уже посчитан.
+        # Они нужны, чтобы сказать человеку, чью строку он пытается поправить.
+        "channel": job["channel"],
+        "author": job["author"],
+    })
+
     events.append({
         "kind": "запись",
         "merchant": answer["merchant"],
