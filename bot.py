@@ -1,31 +1,25 @@
 """Телеграм: приём сообщений, белый список, ответы.
 
 Мозг и руки разделены. Этот файл ничего не понимает про чеки — он их
-принимает, проверяет и записывает. Понимает agent.py.
+принимает и кладёт в очередь на разбор, а ответ агента подаёт словами в чат.
+Разбор — общий для обоих каналов, он живёт в intake.py.
 """
 
 import json
+import queue
 import threading
 import time
 
 import requests
 
 import config
+import feed
+import intake
 import state as memory
 import web
 
-from datetime import date, datetime
-
-import agent
-import checks
-import sheet
-
 API = "https://api.telegram.org/bot{token}/{method}"
 POLL_SECONDS = 30
-
-INBOX = config.BASE_DIR / "чеки" / "входящие"
-DONE = config.BASE_DIR / "чеки" / "готово"
-DOUBTFUL = config.BASE_DIR / "чеки" / "спорные"
 
 
 def call(token, method, **params):
@@ -65,8 +59,8 @@ def who(message):
 def extract(message):
     """Любой вход сводится к паре «что разбирать» и «откуда пришло».
 
-    Веток две: фотография и текст. Голосовые в проекте не разбираются —
-    расшифровки в Bot API нет, и решение это окончательное."""
+    Веток три: фотография, текст и голосовое. Голосовые в проекте не
+    разбираются — Claude не принимает звук, а Bot API расшифровки не даёт."""
     if message.get("photo"):
         # Подпись под фотографией в первой версии не читается: чек говорит
         # сам за себя, а спорить с ним подписью — отдельная история.
@@ -74,16 +68,12 @@ def extract(message):
                       key=lambda size: size.get("file_size")
                       or size.get("width", 0) * size.get("height", 0))
         return {"kind": "фото", "photo": largest}
+    if message.get("voice") or message.get("audio"):
+        return {"kind": "голос"}
     text = (message.get("text") or "").strip()
     if text:
         return {"kind": "текст", "text": text}
     return None
-
-
-def safe(name):
-    """Ник в имя файла: буквы и цифры оставляем, остальное — подчёркивание."""
-    cleaned = "".join(ch if ch.isalnum() else "_" for ch in name).strip("_")
-    return cleaned or "кто-то"
 
 
 def download_photo(token, photo, sender):
@@ -92,33 +82,7 @@ def download_photo(token, photo, sender):
     url = f"https://api.telegram.org/file/bot{token}/{info['file_path']}"
     response = requests.get(url, timeout=60)
     response.raise_for_status()
-    INBOX.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    path = INBOX / f"{stamp}_{safe(sender)}.jpg"
-    path.write_bytes(response.content)
-    return path
-
-
-def move(path, folder):
-    """Файл едет в готово/ только при статусе «готово», иначе в спорные/."""
-    folder.mkdir(parents=True, exist_ok=True)
-    target = folder / path.name
-    path.replace(target)
-    return target
-
-
-def reply_text(answer, verdict, written):
-    """Одна фраза от агента плюс то, что заметили проверки."""
-    if not written:
-        head = "Разобрал, но в таблицу не попало — попробую позже"
-    elif verdict["status"] == "готово":
-        head = "Записал"
-    else:
-        head = "Записал с пометкой «проверить»"
-    lines = [f"{head}: {answer['reply']}"]
-    lines += ["— " + reason for reason in verdict["reasons"]]
-    lines += ["— " + warning for warning in verdict["warnings"]]
-    return "\n".join(lines)
+    return intake.save_photo(response.content, sender)
 
 
 def knock(env, st, message):
@@ -141,10 +105,14 @@ def knock(env, st, message):
         "Если он вас ждёт — передайте ему, что вы написали.")
 
 
-def handle(env, st, message, channel, author):
-    """Путь сообщения от телеграма до строки в таблице."""
+def admit(env, st, jobs, message):
+    """От телеграмного сообщения до задания на разбор.
+
+    Здесь только приём: белый список, скачивание, дубликат. Разбор — общий,
+    он в intake.accept(), и зовёт его поток разбора."""
     settings = config.load_settings()
     chat_id = message["chat"]["id"]
+    author = who(message)
     if message.get("from", {}).get("id") not in config.allowed_ids(settings):
         knock(env, st, message)
         return
@@ -156,29 +124,22 @@ def handle(env, st, message, channel, author):
             "платили. Например: обед 850 картой")
         return
 
-    # Отложенные строки уезжают при первой возможности — раньше, чем новая.
-    delivered = sheet.flush(st, env["sheet_url"], env["sheet_secret"])
-    if delivered:
-        say(env["bot_token"], chat_id,
-            f"Отложенные строки доехали до таблицы: {delivered}.")
-
-    categories, source = sheet.categories(st, env["sheet_url"], env["sheet_secret"])
-    if not categories:
-        say(env["bot_token"], chat_id,
-            "Не вижу справочник статей в таблице — разбирать не буду. Иначе "
-            "в отчёте заведутся выдуманные статьи. Проверьте лист «Статьи».")
+    if incoming["kind"] == "голос":
+        tell(env, chat_id, {"kind": "слово", "text": "Голосовые не умею.",
+                            "note": "напишите текстом или пришлите фото чека",
+                            "author": author, "channel": "телеграм"})
         return
-    if source == "запас":
-        say(env["bot_token"], chat_id,
-            "Таблица не отдала справочник, работаю по последнему известному "
-            "списку статей.")
 
-    path = None
-    unique_id = None
+    job = {"kind": incoming["kind"], "payload": "", "channel": "телеграм",
+           "author": author, "chat_id": chat_id, "file": "", "mark": "", "task": ""}
+
     if incoming["kind"] == "фото":
-        unique_id = incoming["photo"]["file_unique_id"]
-        if memory.seen(st, unique_id):
-            say(env["bot_token"], chat_id, "Этот чек уже записан.")
+        mark = incoming["photo"]["file_unique_id"]
+        old = intake.duplicate(st, mark)
+        if old:
+            tell(env, chat_id, {"kind": "слово", "text": "Этот чек уже записан.",
+                                "row": old.get("row"), "note": intake.when(old),
+                                "author": author, "channel": "телеграм"})
             return
         try:
             path = download_photo(env["bot_token"], incoming["photo"], author)
@@ -189,60 +150,67 @@ def handle(env, st, message, channel, author):
             return
         # Ответа ждать 15–50 секунд, человеку надо сказать, что мы живы.
         say(env["bot_token"], chat_id, "Смотрю чек…")
-        payload = str(path)
+        job.update(payload=str(path), file=path.name, mark=mark)
     else:
-        payload = incoming["text"]
+        job.update(payload=incoming["text"])
 
-    today = date.today()
-    try:
-        answer = agent.parse(incoming["kind"], payload, categories, today,
-                             settings["engine"])
-    except agent.AgentError as error:
-        # Файл остаётся во входящих: сам он не пересмотрится, второй раз
-        # чек присылает человек.
-        print(f"агент не справился: {error}")
-        say(env["bot_token"], chat_id,
-            "Не смог разобрать. Попробуйте ещё раз или напишите текстом.")
-        return
+    jobs.put(job)
 
-    if answer["intent"] == "правка":
-        # Правка последней записи появится в срезе 3. Пока честно говорим,
-        # что не умеем, и ничего не пишем: молча проглотить исправление
-        # хуже, чем отказать.
-        if path:
-            move(path, DOUBTFUL)
-        say(env["bot_token"], chat_id,
-            "Правки пока не умею. Пришлите трату заново, целиком.")
-        return
 
-    if answer["intent"] == "не расход":
-        # В таблицу не пишем вообще. Файл не помечаем разобранным: если это
-        # было меню, человек может прислать настоящий чек тем же файлом.
-        if path:
-            move(path, DOUBTFUL)
-        say(env["bot_token"], chat_id, answer["reply"])
-        return
+def tell(env, chat_id, event):
+    """Событие в ленту и то же самое словами в чат."""
+    feed.add(event)
+    say(env["bot_token"], chat_id, as_text(event))
 
-    verdict = checks.review(answer, categories, today)
-    if path:
-        path = move(path, DONE if verdict["status"] == "готово" else DOUBTFUL)
 
-    row = {
-        "date": answer["date"],
-        "amount": answer["amount"] if checks.is_number(answer["amount"]) else "",
-        "currency": answer["currency"],
-        "merchant": answer["merchant"],
-        "category": verdict["category"],
-        "payment": answer["payment"],
-        "source": "фото чека" if incoming["kind"] == "фото" else "текст",
-        "who": author,
-        "status": verdict["status"],
-        "file": path.name if path else "",
-    }
-    written = sheet.deliver(st, env["sheet_url"], env["sheet_secret"], row)
-    if unique_id:
-        memory.remember(st, unique_id)
-    say(env["bot_token"], chat_id, reply_text(answer, verdict, written))
+def as_text(event):
+    """Событие ленты словами, для телеграма.
+
+    Страница из тех же полей собирает свою строку — с разрядами в сумме и
+    колонкой цифр. В чате разрядов не будет, зато будет фраза агента."""
+    if event["kind"] != "запись":
+        line = event.get("text", "")
+        if event.get("row"):
+            line += f" — строка {event['row']}"
+        note = event.get("note")
+        return f"{line}\n{note}" if note else line
+
+    if not event["row"]:
+        head = "Разобрал, но в таблицу не попало — попробую позже"
+    elif event["status"] == "готово":
+        head = "Записал"
+    else:
+        head = "Записал с пометкой «проверить»"
+    lines = [f"{head}: {event['reply']}"]
+    if event["row"]:
+        lines[0] += f" — строка {event['row']}"
+    lines += ["— " + reason for reason in event["reasons"]]
+    lines += ["— " + warning for warning in event["warnings"]]
+    return "\n".join(lines)
+
+
+def worker(env, st, jobs):
+    """Поток разбора: берёт задания по одному и зовёт общий приём.
+
+    Разбор идёт 15–50 секунд. Держать на нём телеграмный опрос или
+    HTTP-запрос браузера нельзя — поэтому он живёт здесь, а ответ приезжает
+    событием в ленту."""
+    while True:
+        job = jobs.get()
+        try:
+            events = intake.accept(env, st, job)
+        except Exception as error:
+            # Одно сорвавшееся задание не должно останавливать поток: иначе
+            # бот замолчит навсегда, ничего об этом не сказав.
+            print(f"разбор сорвался: {error}")
+            events = [intake.sign({"kind": "слово",
+                                   "text": "Что-то пошло не так — попробуйте ещё раз."},
+                                  job)]
+        for event in events:
+            feed.add(event)
+            if job["channel"] == "телеграм" and job.get("chat_id"):
+                say(env["bot_token"], job["chat_id"], as_text(event))
+        memory.save(st)
 
 
 def telegram_loop(env, st, jobs):
@@ -261,7 +229,7 @@ def telegram_loop(env, st, jobs):
             message = update.get("message")
             if message:
                 try:
-                    handle(env, st, message, "телеграм", who(message))
+                    admit(env, st, jobs, message)
                 except Exception as error:
                     # Одно сломанное сообщение не должно останавливать бота:
                     # offset уже сдвинут, следующее разберётся.
@@ -273,8 +241,9 @@ def main():
     env = config.load_env()
     config.refuse_if_api_key()
     st = memory.load()
-    jobs = None  # очередь заданий появится в задаче 3
+    jobs = queue.Queue()
 
+    threading.Thread(target=worker, args=(env, st, jobs), daemon=True).start()
     threading.Thread(target=telegram_loop, args=(env, st, jobs),
                      daemon=True).start()
 

@@ -48,14 +48,25 @@ with tempfile.TemporaryDirectory() as folder:
     check("испорченный файл не роняет бота", state.load() == state.EMPTY)
 
     memory = state.load()
-    state.remember(memory, "AgAD123")
-    check("файл запоминается", state.seen(memory, "AgAD123"))
-    check("чужой файл не считается разобранным", not state.seen(memory, "AgAD999"))
+    state.remember(memory, "AgAD123", 47)
+    check("файл запоминается вместе с номером строки",
+          state.seen(memory, "AgAD123")["row"] == 47)
+    check("чужой файл не считается разобранным",
+          state.seen(memory, "AgAD999") is None)
+    state.remember(memory, "AgAD777", None)
+    check("строка без номера тоже запоминается",
+          state.seen(memory, "AgAD777")["row"] is None)
 
     for number in range(600):
-        state.remember(memory, f"file{number}")
+        state.remember(memory, f"file{number}", number)
     check("список разобранных не растёт бесконечно",
           len(memory["seen"]) == state.SEEN_LIMIT)
+    check("выкидывается старое, а не новое",
+          state.seen(memory, "file599") is not None)
+
+    state.STATE_PATH.write_text('{"seen": ["старый", "формат"]}', encoding="utf-8")
+    check("список отпечатков от прежней версии не роняет бота",
+          state.load()["seen"] == {})
 
     first = state.load()
     first["queue"].append({"merchant": "проверка"})

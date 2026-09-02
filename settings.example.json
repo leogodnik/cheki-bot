@@ -1,5 +1,6 @@
 {
   "engine": "claude_code",
+  "owner": "Ваше имя",
   "allowed": [
     {"id": 123456789, "username": "ваш-ник", "name": "Ваше имя"}
   ],

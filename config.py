@@ -25,7 +25,7 @@ SETTINGS_PATH = BASE_DIR / "settings.json"
 REQUIRED_ENV = ("BOT_TOKEN", "SHEET_URL", "SHEET_SECRET")
 
 # Пустой белый список — безопасное состояние: бот не отвечает никому.
-DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": []}
+DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": ""}
 
 
 def load_env():

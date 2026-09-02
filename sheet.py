@@ -64,14 +64,14 @@ def append_row(url, secret, row):
 
 
 def deliver(state, url, secret, row):
-    """Пишет строку, а не вышло — кладёт в очередь. True, если строка в таблице."""
+    """Пишет строку и возвращает её номер. Не вышло — кладёт в очередь и
+    возвращает None: разобрали, но в таблицу пока не попало."""
     try:
-        append_row(url, secret, row)
-        return True
+        return append_row(url, secret, row)
     except (SheetError, requests.RequestException) as error:
         print(f"таблица не приняла строку ({error}) — отложил в очередь")
         state["queue"].append(row)
-        return False
+        return None
 
 
 def flush(state, url, secret):
