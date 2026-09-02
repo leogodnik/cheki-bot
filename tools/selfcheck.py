@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import checks
 import feed
+import intake
 import sheet
 import state
 import web
@@ -321,6 +322,46 @@ with tempfile.TemporaryDirectory() as folder:
 
     state.save(memory)
     check("память переживает перезапуск", state.load()["last"][web_spot]["row"] == 49)
+
+
+print()
+print("сравнение записей")
+was = {"date": "2026-09-01", "amount": 450.0, "currency": "RUB",
+       "merchant": "Пятёрочка", "category": "Продукты", "payment": "карта",
+       "source": "текст", "who": "Лена", "status": "готово", "file": ""}
+
+check("одинаковые записи — пустой дифф", intake.diff(was, dict(was)) == {})
+check("изменилась сумма — в диффе только сумма",
+      intake.diff(was, dict(was, amount=480.0)) == {"amount": 480.0})
+check("450 и 450.0 — одна и та же сумма",
+      intake.diff(was, dict(was, amount=450)) == {})
+check("пустая клетка и None — одно и то же",
+      intake.diff(was, dict(was, file=None)) == {})
+check("стереть продавца — тоже правка",
+      intake.diff(was, dict(was, merchant="")) == {"merchant": ""})
+check("дифф ничего не исключает: подмену источника он бы тоже заметил",
+      intake.diff(was, dict(was, source="фото чека")) == {"source": "фото чека"})
+
+check("в задании на правку есть прошлая запись",
+      "Пятёрочка" in intake.rework(was, "не 450, а 480"))
+check("и слова человека", "не 450, а 480" in intake.rework(was, "не 450, а 480"))
+check("а происхождение строки агенту не показывается",
+      "Лена" not in intake.rework(was, "не 450, а 480"))
+
+now = dict(was, amount=480.0, category="Кафе и рестораны")
+check("одно поле — «Поправил сумму: 450 → 480»",
+      intake.retell(["amount"], was, now) == "Поправил сумму: 450 → 480")
+check("два поля — оба в одной фразе",
+      intake.retell(["amount", "category"], was, now) ==
+      "Поправил сумму: 450 → 480, статью: Продукты → Кафе и рестораны")
+check("копейки не теряются",
+      intake.retell(["amount"], was, dict(was, amount=480.5)) ==
+      "Поправил сумму: 450 → 480.50")
+check("пустое значение читается как «пусто»",
+      intake.retell(["merchant"], was, dict(was, merchant="")) ==
+      "Поправил продавца: Пятёрочка → пусто")
+check("незнакомое поле из ответа моста фразу не роняет",
+      "выдумка" in intake.retell(["выдумка"], was, now))
 
 
 print()
