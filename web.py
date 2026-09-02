@@ -11,7 +11,9 @@ import logging
 import socket
 import sys
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
+
+import feed
 
 FIRST_PORT = 8765
 LAST_PORT = 8775
@@ -25,7 +27,22 @@ def create(env, st, jobs, blocked=""):
     def page():
         return render_template("workspace.html")
 
+    @app.get("/api/events")
+    def events():
+        """Что нового в ленте после события с номером after.
+
+        Страница зовёт этот маршрут раз в три секунды. Вебсокетов нет
+        намеренно: на локальном адресе опрос дешевле и понятнее на уроке."""
+        after = request.args.get("after", default=0, type=int)
+        fresh, last = feed.since(after)
+        return jsonify(events=fresh, last=last, state=snapshot(env, st, blocked))
+
     return app
+
+
+def snapshot(env, st, blocked):
+    """Состояние для сайдбара. Наполнится в задаче 9."""
+    return {}
 
 
 def choose_port():

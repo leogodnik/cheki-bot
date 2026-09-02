@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import checks
+import feed
 import state
 
 passed = 0
@@ -59,6 +60,37 @@ with tempfile.TemporaryDirectory() as folder:
     first = state.load()
     first["queue"].append({"merchant": "проверка"})
     check("заготовка не общая на всех", state.load()["queue"] == [])
+
+print()
+print("лента")
+
+feed.forget()
+first = feed.add({"kind": "слово", "text": "раз"})
+second = feed.add({"kind": "слово", "text": "два"})
+check("номера растут", first["id"] == 1 and second["id"] == 2)
+check("время проставляется", first["at"] > 0)
+
+fresh, last = feed.since(0)
+check("с нуля отдаётся всё", len(fresh) == 2 and last == 2)
+
+fresh, last = feed.since(1)
+check("после первого — только второе",
+      len(fresh) == 1 and fresh[0]["text"] == "два")
+
+fresh, last = feed.since(2)
+check("после последнего — пусто, номер прежний", fresh == [] and last == 2)
+
+fresh, last = feed.since(99)
+check("номер из прошлой жизни бота — отдаём журнал целиком", len(fresh) == 2)
+
+feed.forget()
+for number in range(feed.LIMIT + 50):
+    feed.add({"kind": "слово", "text": str(number)})
+fresh, last = feed.since(0)
+check("лента не растёт бесконечно", len(fresh) == feed.LIMIT)
+check("выкидывается старое, а не новое", fresh[-1]["text"] == str(feed.LIMIT + 49))
+
+feed.forget()
 
 print()
 print("проверки без модели")
