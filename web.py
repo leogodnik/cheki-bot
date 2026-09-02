@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, send_file
 
 import agent
 import config
@@ -36,6 +36,26 @@ def create(env, st, jobs, blocked=""):
     @app.get("/")
     def page():
         return render_template("workspace.html")
+
+    @app.get("/photo/<name>")
+    def sent_photo(name):
+        """Присланная фотография — для превью в ленте.
+
+        По ходу разбора файл переезжает из входящие/ в готово/ или спорные/,
+        поэтому ищем во всех трёх: пузырь в ленте не должен гаснуть оттого,
+        что бот дочитал чек.
+
+        Из адреса берётся только последний кусок имени: «..» и подкаталоги не
+        должны уводить наружу папки «чеки». Страница локальная, но отдавать
+        по адресу произвольный файл с диска — не то, чем стоит рисковать."""
+        safe = Path(name).name
+        if Path(safe).suffix.lower() not in PICTURES:
+            abort(404)
+        for folder in (intake.INBOX, intake.DONE, intake.DOUBTFUL):
+            path = folder / safe
+            if path.is_file():
+                return send_file(path)
+        abort(404)
 
     @app.get("/api/events")
     def events():
@@ -154,7 +174,10 @@ def photo(st, jobs, upload, author):
     path = intake.save_photo(data, author, Path(name).suffix.lower())
     job = {"kind": "фото", "payload": str(path), "channel": "браузер",
            "author": author, "chat_id": None, "file": path.name, "mark": mark}
-    return start(jobs, job, mine)
+    # Имя на диске, а не то, как файл звался у человека: по нему страница
+    # просит превью маршрутом /photo. Имя от человека остаётся в событии на
+    # случай, если файла уже нет и пузырь вернётся к подписи.
+    return start(jobs, job, dict(mine, photo=path.name))
 
 
 def start(jobs, job, mine):
