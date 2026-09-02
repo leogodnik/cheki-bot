@@ -20,6 +20,36 @@
     b.addEventListener("click", function () { go(b.dataset.go); });
   });
 
+  /* Разговор с сервером. Тот же вид, что у сайдбара: маршрут латиницей,
+     тело — JSON, русские слова едут значениями, а не в адресе.
+
+     Своей ленты у мастера нет, поэтому отказ показывается прямо на экране,
+     плашкой под формой. */
+  function ask(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body || {})
+    }).then(function (response) { return response.json(); })
+      .catch(function () {
+        return {ok: false, error: "Бот не отвечает. Посмотрите окно терминала, " +
+                                  "в котором он запущен."};
+      });
+  }
+
+  /* Плашка с ответом проверки. Один вид у успеха и у отказа намеренно: это
+     не «ошибка», а результат проверки, и читать его надо в обоих случаях.
+
+     textContent, а не innerHTML: в плашку едет то, что сказал сервер, — а он
+     передаёт как есть отказы телеграма и Google. Вставлять чужую строку
+     разметкой значит однажды получить на экране чужой тег. Заодно этим
+     стирается выдуманный <b> из макета, стоявший внутри span. */
+  function verdict(id, text) {
+    var box = document.getElementById(id);
+    box.querySelector("span").textContent = text;
+    box.hidden = !text;
+  }
+
   /* Экран можно открыть сразу по адресу: /#s-sheet */
   if (location.hash && document.querySelector(".step" + location.hash)) {
     go(location.hash.slice(1));
