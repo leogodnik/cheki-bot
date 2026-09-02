@@ -225,6 +225,45 @@
       .catch(function () {});
   }
 
+  /* Отправка возвращается сразу, с плашкой «Смотрю чек…». Ответ приедет
+     опросом. Вернувшиеся события показываем немедленно, чтобы поле не
+     выглядело мёртвым три секунды. */
+  function send(form) {
+    fetch("/api/say", {method: "POST", body: form})
+      .then(function (response) { return response.json(); })
+      .then(receive)
+      .catch(function () {
+        place({id: 0, kind: "слово", text: "Бот не отвечает.",
+               note: "Проверьте окно терминала, в котором он запущен."});
+      });
+  }
+
+  function sendText(area) {
+    var text = area.value.trim();
+    if (!text) return;
+    area.value = "";
+    area.style.height = "";
+    var form = new FormData();
+    form.append("text", text);
+    send(form);
+  }
+
+  /* Enter отправляет, Shift+Enter переносит строку — как в чате, а не как
+     в форме. Поле растёт под текст: трата в три строки не должна прятаться
+     под скроллом. */
+  document.querySelectorAll(".box .in").forEach(function (area) {
+    area.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendText(area);
+      }
+    });
+    area.addEventListener("input", function () {
+      area.style.height = "";
+      area.style.height = area.scrollHeight + "px";
+    });
+  });
+
   poll();
   setInterval(poll, 3000);
 })();
