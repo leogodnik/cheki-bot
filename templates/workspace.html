@@ -7,17 +7,6 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/favicon.png" sizes="32x32">
-<style>
-  /* Та же история, что была у .nv, и то же место для правки. .verdict сама
-     объявляет display: flex, а авторское правило старше браузерного [hidden] —
-     поэтому плашка, спрятанная атрибутом, всё равно видна: в разделе «Движок»
-     она висела пустой полосой у исправного бота. У соседних .pane и .step такое
-     правило в style.css есть, у .verdict его забыли.
-
-     Правильная правка — одна строка там же, рядом с .pane[hidden]. Но тот файл
-     закрыт для правок, поэтому строка живёт здесь. */
-  .verdict[hidden] { display: none; }
-</style>
 </head>
 <body class="fixed">
 
@@ -43,10 +32,8 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
   <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
   <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.3 3.3 0 015 4.6l-8.5 8.5a1.7 1.7 0 01-2.4-2.4L15 9"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -75,7 +62,7 @@
     </button>
 
     <button class="nv" type="button" id="nav-telegram" data-pane="telegram">
-      <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot off"></span>
+      <svg class="ic"><use href="#i-tg"/></svg>Телеграм<span class="dot off"></span>
     </button>
 
     <button class="nv" type="button" id="nav-engine" data-pane="engine">
@@ -100,8 +87,10 @@
         <span class="who">@financialpostpunk<i>Леонид Годник</i></span>
       </a>
       <span class="rt">
-        <button type="button" title="Поиск"><svg class="ic"><use href="#i-search"/></svg></button>
-        <button type="button" title="Свернуть сайдбар"><svg class="ic"><use href="#i-panel"/></svg></button>
+        <button type="button" id="sd-min" title="Свернуть сайдбар"
+                aria-label="Свернуть сайдбар" aria-expanded="true" aria-controls="sd">
+          <svg class="ic"><use href="#i-panel"/></svg>
+        </button>
       </span>
     </div>
   </aside>

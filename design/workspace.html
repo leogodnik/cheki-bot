@@ -61,6 +61,30 @@
   .ft a:hover { color: var(--hot); }
   .ft a .ic { width: 14px; height: 14px; margin-left: 3px; }
 
+  /* ── сайдбар свёрнут ── */
+  /* Колонка схлопывается в полосу с одними иконками. Совсем прятать сайдбар
+     нельзя: вместе с ним уедет и кнопка, которой его возвращают. */
+  .ca.min { grid-template-columns: 60px 1fr; }
+  .ca.min .sd { padding-left: 8px; padding-right: 8px; }
+  .ca.min .wm { justify-content: center; padding: 2px 0 16px; }
+  .ca.min .wm b { display: none; }
+  /* Подпись пункта гаснет нулевым кеглем: иконке это не мешает, её размер
+     задан в пикселях. */
+  .ca.min .nv { position: relative; gap: 0; justify-content: center;
+                padding: 8px 0; font-size: 0; }
+  .ca.min .nv .r { display: none; }
+  .ca.min .nv .dot { position: absolute; top: 7px; right: 9px; margin: 0; }
+  /* Записи сегодня в полосу не влезают — уходят вместе с заголовком. */
+  .ca.min .hd, .ca.min .scroll { display: none; }
+  .ca.min .ft { margin-top: auto; padding: 11px 0; }
+  .ca.min .ft .me { flex-direction: column; gap: 13px; }
+  .ca.min .ft .who { display: none; }
+  .ca.min .ft .rt { margin-left: 0; }
+  .ca.min .ft a { justify-content: center; font-size: 0; gap: 0; }
+  .ca.min .ft a .ic { margin-left: 0; }
+  /* Свёрнуто — иконка панели зеркалится: полоса слева, поле справа. */
+  .ca.min .ft .rt .ic { transform: scaleX(-1); }
+
   /* ── основное поле ── */
   .mn { display: flex; flex-direction: column; padding: 0 40px; overflow: hidden; }
   .hero { flex: 1; display: flex; flex-direction: column;
@@ -117,10 +141,8 @@
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/></symbol>
   <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 20v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
-  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
   <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
   <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.3 3.3 0 015 4.6l-8.5 8.5a1.7 1.7 0 01-2.4-2.4L15 9"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -137,7 +159,7 @@
     <div class="nv on"><svg class="ic"><use href="#i-plus"/></svg>Новый расход</div>
     <div class="nv"><svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r">16 статей</span></div>
     <div class="nv"><svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r">2</span></div>
-    <div class="nv"><svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot"></span></div>
+    <div class="nv"><svg class="ic"><use href="#i-tg"/></svg>Телеграм<span class="dot"></span></div>
     <div class="nv"><svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r">Claude Code</span></div>
 
     <div class="hd">Записи сегодня<svg class="ic"><use href="#i-sliders"/></svg></div>
@@ -155,7 +177,7 @@
       <div class="me">
         <svg class="ic"><use href="#i-user"/></svg>
         <span class="who">Леонид</span>
-        <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
+        <span class="rt"><svg class="ic"><use href="#i-panel"/></svg></span>
       </div>
       <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
         <svg class="ic"><use href="#i-tg"/></svg>Курс: @financialpostpunk
@@ -187,7 +209,7 @@
     <div class="nv"><svg class="ic"><use href="#i-plus"/></svg>Новый расход</div>
     <div class="nv"><svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r">16 статей</span></div>
     <div class="nv"><svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r">2</span></div>
-    <div class="nv"><svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot"></span></div>
+    <div class="nv"><svg class="ic"><use href="#i-tg"/></svg>Телеграм<span class="dot"></span></div>
     <div class="nv"><svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r">Claude Code</span></div>
     <div class="hd">Записи сегодня<svg class="ic"><use href="#i-sliders"/></svg></div>
     <div class="scroll">
@@ -201,7 +223,7 @@
       <div class="me">
         <svg class="ic"><use href="#i-user"/></svg>
         <span class="who">Леонид</span>
-        <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
+        <span class="rt"><svg class="ic"><use href="#i-panel"/></svg></span>
       </div>
       <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
         <svg class="ic"><use href="#i-tg"/></svg>Курс: @financialpostpunk
@@ -250,6 +272,51 @@
           <span class="rt">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></span>
         </div>
       </div>
+    </div>
+  </main>
+</div>
+
+<h3 class="cap">Сайдбар свёрнут</h3>
+<p class="cap">Кнопка панели в подвале схлопывает колонку в полосу с иконками.
+   Подписи разделов переезжают во всплывающие подсказки, записи за сегодня уходят.</p>
+
+<div class="ca min">
+  <aside class="sd">
+    <div class="wm"><svg class="mark"><use href="#mark"/></svg><b>Чеки</b></div>
+    <div class="nv" title="Новый расход"><svg class="ic"><use href="#i-plus"/></svg>Новый расход</div>
+    <div class="nv" title="Таблица"><svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r">16 статей</span></div>
+    <div class="nv" title="Кто может писать"><svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r">2</span></div>
+    <div class="nv" title="Телеграм"><svg class="ic"><use href="#i-tg"/></svg>Телеграм<span class="dot"></span></div>
+    <div class="nv" title="Движок"><svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r">Claude Code</span></div>
+    <div class="hd">Записи сегодня<svg class="ic"><use href="#i-sliders"/></svg></div>
+    <div class="scroll">
+      <div class="li"><span class="bl"></span><span class="nm">Пятёрочка</span><span class="am">1 004,70</span></div>
+      <div class="li"><span class="bl"></span><span class="nm">Такси · Мария</span><span class="am">450,00</span></div>
+      <div class="li"><span class="bl chk"></span><span class="nm">АЗС Лукойл</span><span class="am">—</span></div>
+    </div>
+    <div class="ft">
+      <div class="me">
+        <svg class="ic"><use href="#i-user"/></svg>
+        <span class="who">Леонид</span>
+        <span class="rt"><svg class="ic"><use href="#i-panel"/></svg></span>
+      </div>
+      <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
+        <svg class="ic"><use href="#i-tg"/></svg>Курс: @financialpostpunk
+      </a>
+    </div>
+  </aside>
+
+  <main class="mn">
+    <div class="hero">
+      <div class="greet"><svg class="mark"><use href="#mark"/></svg><h1>Что записываем, Леонид?</h1></div>
+      <div class="box">
+        <div class="ph">Перетащите чек или напишите текстом</div>
+        <div class="bar">
+          <span class="add"><svg class="ic"><use href="#i-plus"/></svg></span>
+          <span class="rt">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></span>
+        </div>
+      </div>
+      <div class="drophint">Фотографию чека можно просто перетащить в окно</div>
     </div>
   </main>
 </div>

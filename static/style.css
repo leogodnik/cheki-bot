@@ -143,6 +143,46 @@ body.fixed { height: 100vh; height: 100dvh; overflow: hidden; }
 .ft .rt { margin-left: auto; display: flex; gap: 13px; color: var(--mid); }
 .ft .rt button { border: 0; background: transparent; padding: 0; color: inherit; cursor: pointer; display: flex; }
 
+/* ── свёрнутый сайдбар ── */
+
+/* Колонка схлопывается в полосу с одними иконками — экран «Сайдбар свёрнут»
+   в эталоне. Совсем прятать сайдбар нельзя: вместе с ним уедет и кнопка,
+   которой его возвращают, и пришлось бы заводить вторую в основном поле. */
+
+.app { transition: grid-template-columns .18s ease; }
+.app.sd-min { grid-template-columns: 60px 1fr; }
+
+.sd-min .sd { padding-left: 8px; padding-right: 8px; }
+
+/* Знак остаётся, название уходит: по знаку видно, что приложение то же. */
+.sd-min .wm { justify-content: center; padding: 2px 0 16px; }
+.sd-min .wm b { display: none; }
+
+/* Подпись пункта гаснет нулевым кеглем. Текст лежит в .nv голым узлом, без
+   обёртки, и спрятать его иначе нечем; иконке это не мешает — её размер задан
+   в пикселях. Саму подпись app.js на время переносит в title. */
+.sd-min .nv {
+  position: relative;
+  gap: 0; justify-content: center;
+  padding: 8px 0; font-size: 0;
+}
+.sd-min .nv .r { display: none; }
+.sd-min .nv .dot { position: absolute; top: 7px; right: 9px; margin: 0; }
+
+/* Записи сегодня в полосу не влезают — уходят вместе с заголовком. */
+.sd-min .hd, .sd-min .scroll { display: none; }
+
+/* Скролла больше нет, и подвал прижимает вниз автоматический отступ. */
+.sd-min .ft {
+  margin: auto -8px 0; padding: 11px 0;
+  flex-direction: column; gap: 14px;
+}
+.sd-min .ft .who { display: none; }
+.sd-min .ft .rt { margin-left: 0; }
+
+/* Свёрнуто — иконка панели зеркалится: полоса слева, поле справа. */
+.sd-min #sd-min .ic { transform: scaleX(-1); }
+
 /* ── основное поле ── */
 
 .mn { display: flex; flex-direction: column; padding: 0 40px; overflow: hidden; }
@@ -405,6 +445,10 @@ a.bt { display: inline-block; text-decoration: none; }
   background: var(--warn-bg); color: var(--warn-tx);
   border-radius: 9px; font-size: 13.5px;
 }
+/* .verdict сама объявляет display: flex, а авторское правило старше браузерного
+   [hidden] — без этой строки плашка, спрятанная атрибутом, всё равно видна:
+   в разделе «Движок» она висела пустой полосой у исправного бота. */
+.verdict[hidden] { display: none; }
 .verdict .mark { width: 14px; height: 14px; position: relative; top: 2px; flex: none; }
 .verdict b { font-weight: 600; }
 
@@ -483,10 +527,14 @@ code.inline { font-family: var(--mono); font-size: .88em; background: var(--whit
   }
   .app.menu-open .sd { transform: none; }
   .mn { padding: 0 18px; }
+  /* Сайдбар здесь выезжает ящиком поверх поля: сворачивать нечего,
+     кнопку убираем и класс обезвреживаем. */
+  .app.sd-min { grid-template-columns: 1fr; }
+  #sd-min { display: none; }
   .topbar { display: flex; }
   .greet h1 { font-size: 29px; }
   .sheet h1, .step h1 { font-size: 25px; }
 }
 
-@media (prefers-reduced-motion: reduce) { .sd { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sd, .app { transition: none; } }
 

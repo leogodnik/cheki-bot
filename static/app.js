@@ -109,6 +109,48 @@
     burger.setAttribute("aria-expanded", String(open));
   });
 
+  /* Сворачивание сайдбара в полосу с иконками.
+
+     Выбор запоминается: свернули один раз — рабочее место открывается
+     свёрнутым и завтра. Иначе кнопку пришлось бы жать каждое утро заново,
+     а это ровно та мелочь, из-за которой ей перестают пользоваться. */
+  var sdMin = document.getElementById("sd-min");
+  var sdNavs = document.querySelectorAll("#sd .nv");
+
+  function collapse(min) {
+    app.classList.toggle("sd-min", min);
+    sdMin.title = min ? "Развернуть сайдбар" : "Свернуть сайдбар";
+    sdMin.setAttribute("aria-label", sdMin.title);
+    sdMin.setAttribute("aria-expanded", String(!min));
+
+    /* Свёрнутый пункт — одна иконка без подписи. Подпись переезжает во
+       всплывающую подсказку, иначе разделы становятся ребусом. */
+    sdNavs.forEach(function (nav) {
+      if (min) nav.title = navLabel(nav);
+      else nav.removeAttribute("title");
+    });
+  }
+
+  /* Подпись пункта — голый текстовый узел рядом с иконкой. Брать textContent
+     нельзя: к подписи прилипнет счётчик из .r — «Кто может писать3». */
+  function navLabel(nav) {
+    var text = "";
+    Array.prototype.forEach.call(nav.childNodes, function (node) {
+      if (node.nodeType === 3) text += node.textContent;
+    });
+    return text.trim();
+  }
+
+  sdMin.addEventListener("click", function () {
+    var min = !app.classList.contains("sd-min");
+    collapse(min);
+    try { localStorage.setItem("sd-min", min ? "1" : ""); } catch (e) {}
+  });
+
+  /* Приватный режим и заблокированные куки роняют localStorage на чтении —
+     тогда просто открываемся развёрнутыми. */
+  try { if (localStorage.getItem("sd-min")) collapse(true); } catch (e) {}
+
   /* Склейка непустых кусков через « · ». Пустое поле агент возвращает честно:
      у «50 рублей сиги» продавца нет, называть его нечем и выдумывать нельзя.
      Без отсева заголовок начинался бы с разделителя: « · 50,00 ₽». */
