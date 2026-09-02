@@ -1,0 +1,7 @@
+{
+  "engine": "claude_code",
+  "allowed": [
+    {"id": 123456789, "username": "ваш-ник", "name": "Ваше имя"}
+  ],
+  "knocked": []
+}
