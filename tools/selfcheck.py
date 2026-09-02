@@ -281,6 +281,49 @@ if copy_path.exists():
           copy_text.strip("\n") == prompt_text.strip("\n"))
 
 print()
+print("память последней записи")
+with tempfile.TemporaryDirectory() as folder:
+    state.STATE_PATH = Path(folder) / "state.json"
+    memory = state.load()
+
+    check("в заготовке есть место под последнюю запись", memory["last"] == {})
+
+    check("у браузера адрес один на всех",
+          state.address("браузер", "Лена") == state.address("браузер", "Пётр"))
+    check("у каждого в телеграме свой адрес",
+          state.address("телеграм", "@maria") != state.address("телеграм", "@ivan"))
+    check("браузер и телеграм не сходятся в один адрес",
+          state.address("браузер", "@maria") != state.address("телеграм", "@maria"))
+
+    web_spot = state.address("браузер", "Лена")
+    tg = state.address("телеграм", "@maria")
+
+    check("пустая память ничего не отдаёт", state.last(memory, web_spot) is None)
+    check("и самой свежей записи в ней тоже нет",
+          state.newest(memory) == (None, None))
+
+    state.remember_last(memory, web_spot, {"row": 47, "fields": {"amount": 450},
+                                           "channel": "браузер", "author": "Лена"})
+    check("записанное помнится", state.last(memory, web_spot)["row"] == 47)
+    check("время проставляется само", state.last(memory, web_spot)["at"] > 0)
+    check("по чужому адресу своей строки нет", state.last(memory, tg) is None)
+
+    state.remember_last(memory, tg, {"row": 48, "fields": {"amount": 900},
+                                     "channel": "телеграм", "author": "@maria"})
+    check("самая свежая — та, что записана последней",
+          state.newest(memory) == (tg, state.last(memory, tg)))
+    check("своя строка на месте и после чужой записи",
+          state.last(memory, web_spot)["row"] == 47)
+
+    state.remember_last(memory, web_spot, {"row": 49, "fields": {"amount": 120},
+                                           "channel": "браузер", "author": "Лена"})
+    check("помним последнюю, а не все", state.last(memory, web_spot)["row"] == 49)
+
+    state.save(memory)
+    check("память переживает перезапуск", state.load()["last"][web_spot]["row"] == 49)
+
+
+print()
 if failed:
     print(f"провалено {len(failed)}: " + ", ".join(failed))
     sys.exit(1)
