@@ -372,6 +372,14 @@ body.fixed { height: 100vh; height: 100dvh; overflow: hidden; }
   transition: background .15s ease, border-color .15s ease;
 }
 .bt:hover { background: var(--hover); border-color: var(--ring); }
+/* Выключенная кнопка. В мастере их две — «Готово» до проверки таблицы и
+   «Да, это он» до проверки токена, — и кнопка, которая выглядит нажимаемой,
+   но не нажимается, читается как поломка, а не как «сначала проверьте».
+   Наведение гасится отдельно: иначе выцветшая кнопка светлела бы под мышью
+   и обещала бы нажатие. */
+.bt:disabled { opacity: .45; cursor: default; }
+.bt:disabled:hover { background: var(--white); border-color: var(--line); }
+.bt.go:disabled:hover { background: var(--hot); border-color: var(--hot); }
 .bt.go { background: var(--hot); border-color: var(--hot); color: #fff; }
 .bt.go:hover { background: var(--warn-tx); border-color: var(--warn-tx); }
 .bt.big { padding: 9px 20px; font-size: 14.5px; }
@@ -445,9 +453,11 @@ a.bt { display: inline-block; text-decoration: none; }
   background: var(--warn-bg); color: var(--warn-tx);
   border-radius: 9px; font-size: 13.5px;
 }
-/* .verdict сама объявляет display: flex, а авторское правило старше браузерного
-   [hidden] — без этой строки плашка, спрятанная атрибутом, всё равно видна:
-   в разделе «Движок» она висела пустой полосой у исправного бота. */
+/* .verdict сама объявляет display: flex, а авторское правило старше
+   браузерного [hidden] — без этой строки спрятанная плашка висит на экране
+   пустой полосой. У соседних .pane и .step такое правило есть, у .verdict
+   его не было, и в срезе 4 плашка «Движок» из-за этого висела у исправного
+   бота. */
 .verdict[hidden] { display: none; }
 .verdict .mark { width: 14px; height: 14px; position: relative; top: 2px; flex: none; }
 .verdict b { font-weight: 600; }

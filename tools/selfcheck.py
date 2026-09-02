@@ -19,6 +19,7 @@ import checks
 import config
 import feed
 import intake
+import setup
 import sheet
 import state
 import web
@@ -400,6 +401,47 @@ check("пустое значение читается как «пусто»",
       "Поправил продавца: Пятёрочка → пусто")
 check("незнакомое поле из ответа моста фразу не роняет",
       "выдумка" in intake.retell(["выдумка"], was, now))
+
+
+print("мастер установки")
+
+check("адрес веб-приложения узнан",
+      setup.address_kind("https://script.google.com/macros/s/AKfy123/exec")
+      == "веб-приложение")
+check("хвост с параметрами не мешает",
+      setup.address_kind("https://script.google.com/macros/s/AKfy123/exec?x=1")
+      == "веб-приложение")
+check("адрес таблицы узнан",
+      setup.address_kind("https://docs.google.com/spreadsheets/d/abc/edit")
+      == "таблица")
+check("тестовое развёртывание узнано",
+      setup.address_kind("https://script.google.com/macros/s/AKfy123/dev")
+      == "без-exec")
+check("чужой адрес узнан", setup.address_kind("https://example.com") == "чужой")
+check("пустая строка узнана", setup.address_kind("   ") == "пусто")
+
+эталон = ["Продукты", "Кафе и рестораны", "Прочее"]
+
+вердикт = setup.categories_verdict(эталон, эталон)
+check("полный справочник — можно дальше", вердикт["ready"] is True)
+check("в вердикте стоит число", "3" in вердикт["note"])
+
+# Та самая ошибка: список вставили с A1, первая статья ушла в заголовок.
+вердикт = setup.categories_verdict(эталон[1:], эталон)
+check("справочник без первой статьи — дальше не пускаем",
+      вердикт["ready"] is False)
+check("вердикт называет пропавшую статью", "Продукты" in вердикт["note"])
+check("вердикт говорит, что делать", "A1" in вердикт["note"])
+
+# Список правил сам человек — это его право, останавливать не за что.
+вердикт = setup.categories_verdict(["Прочее"], эталон)
+check("сокращённый справочник — пускаем, но говорим число",
+      вердикт["ready"] is True and "1" in вердикт["note"])
+
+секрет = setup.new_secret()
+код = setup.script_with_secret(секрет)
+check("секрет подставлен", секрет in код)
+check("заглушки в готовом коде не осталось", setup.PLACEHOLDER not in код)
 
 
 print()
