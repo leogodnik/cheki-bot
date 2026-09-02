@@ -166,7 +166,10 @@ def photo(st, jobs, upload, author):
     mark = intake.fingerprint(data)
     old = intake.duplicate(st, mark)
     if old:
-        return [feed.add(mine), feed.add({
+        # Файл повтора на диск не ложится — второй копии в папке «чеки» быть
+        # не должно. Но первая копия там есть, и её имя мы помним: пузырь
+        # показывает ту самую фотографию, а не имя файла.
+        return [feed.add(dict(mine, photo=old.get("file") or "")), feed.add({
             "kind": "слово", "text": "Этот чек уже записан",
             "row": old.get("row"), "note": intake.when(old),
         })]

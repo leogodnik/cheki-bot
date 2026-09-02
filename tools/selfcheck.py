@@ -60,6 +60,12 @@ with tempfile.TemporaryDirectory() as folder:
     check("строка без номера тоже запоминается",
           state.seen(memory, "AgAD777")["row"] is None)
 
+    state.remember(memory, "AgAD555", 48, "2026-09-03_004050_Леонид.jpg")
+    check("имя файла помнится — иначе повтору нечего показать в ленте",
+          state.seen(memory, "AgAD555")["file"] == "2026-09-03_004050_Леонид.jpg")
+    check("старая память без имени файла не роняет ничего",
+          state.seen(memory, "AgAD123").get("file") == "")
+
     for number in range(600):
         state.remember(memory, f"file{number}", number)
     check("список разобранных не растёт бесконечно",

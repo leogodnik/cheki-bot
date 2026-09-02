@@ -122,7 +122,7 @@ def accept(env, st, job):
     }
     number = sheet.deliver(st, env["sheet_url"], env["sheet_secret"], row)
     if job.get("mark"):
-        memory.remember(st, job["mark"], number)
+        memory.remember(st, job["mark"], number, path.name if path else "")
 
     # Запомнили, что записали последним: из этого потом делается правка.
     # Помним и строку, не доехавшую до таблицы (number is None) — иначе

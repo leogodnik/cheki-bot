@@ -69,10 +69,15 @@ def seen(state, mark):
     return state["seen"].get(mark)
 
 
-def remember(state, mark, row):
+def remember(state, mark, row, file=""):
     """Запомнить разобранный файл. row может быть None: строка ушла в очередь
-    и номера у неё пока нет — но разбирать этот чек второй раз всё равно не надо."""
-    state["seen"][mark] = {"row": row, "at": time.time()}
+    и номера у неё пока нет — но разбирать этот чек второй раз всё равно не надо.
+
+    Имя файла помнится ради превью: повтор бот опознаёт до записи на диск,
+    второй копии не появляется, и показать в ленте он может только ту, первую.
+    Без имени пузырь повтора откатывался к «02-мятый.jpg», хотя сама
+    фотография лежит в папке «чеки» и никуда не делась."""
+    state["seen"][mark] = {"row": row, "at": time.time(), "file": file}
     extra = len(state["seen"]) - SEEN_LIMIT
     if extra > 0:
         for old in list(state["seen"])[:extra]:
