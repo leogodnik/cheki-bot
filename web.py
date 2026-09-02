@@ -10,6 +10,7 @@
 import logging
 import socket
 import sys
+import time
 from pathlib import Path
 from uuid import uuid4
 
@@ -19,6 +20,8 @@ import agent
 import config
 import feed
 import intake
+import setup
+import sheet
 import state as memory
 import telegram
 
@@ -30,10 +33,30 @@ LAST_PORT = 8775
 MAX_FILE = 10 * 1024 * 1024
 PICTURES = (".jpg", ".jpeg", ".png")
 
+# Что сказать про каждый вид адреса. Тексты живут здесь, а не в setup.py:
+# там разбор, здесь разговор с человеком.
+ADDRESS_TROUBLE = {
+    "пусто": "Пустая строка. Нужен адрес, который Google выдал после публикации.",
+    "таблица": "Это адрес самой таблицы — тот, что стоит в строке браузера, "
+               "когда таблица открыта. Боту нужен другой: адрес веб-приложения. "
+               "Он появляется после «Развернуть → Новое развёртывание → "
+               "Веб-приложение», начинается с script.google.com/macros/s/ и "
+               "заканчивается на /exec. Адрес таблицы я запомнил — он пригодится "
+               "для кнопки «Таблица» в рабочем месте.",
+    "чужой": "Это не адрес Google Apps Script. Нужен тот, что выдало окно "
+             "развёртывания: он начинается с script.google.com/macros/s/.",
+    "без-exec": "Адрес почти тот, но не заканчивается на /exec. Так выглядит "
+                "тестовое развёртывание (/dev) или ссылка на сам проект. Нужен "
+                "адрес из окна «Развёртывание обновлено».",
+}
+
 
 def create(env, st, jobs, blocked=""):
     """Приложение Flask. env и st — те же словари, с которыми живёт бот."""
     app = Flask(__name__)
+    # Правки в шаблонах должны быть видны после обновления страницы,
+    # а не после перезапуска бота.
+    app.config["TEMPLATES_AUTO_RELOAD"] = True
 
     @app.get("/")
     def page():
@@ -84,6 +107,72 @@ def create(env, st, jobs, blocked=""):
         «Проверить снова» в мастере должна спросить заново, а не получить
         минутный кэш."""
         return jsonify(engines=agent.versions(fresh=True), titles=agent.TITLES)
+
+    @app.get("/api/setup/script")
+    def setup_script():
+        """Код для Apps Script с уже подставленным секретом.
+
+        Секрет придумывается один раз и тут же ложится в .env. Родись он
+        заново на каждый заход — человек, обновивший страницу после вставки
+        кода, получил бы код с другим секретом, и таблица начала бы отвечать
+        «нет доступа» на ровном месте. Искать причину он будет в таблице."""
+        secret = env["sheet_secret"]
+        if not secret:
+            secret = setup.new_secret()
+            config.save_env({"SHEET_SECRET": secret})
+            config.refresh_env(env)
+        try:
+            code = setup.script_with_secret(secret)
+        except (OSError, ValueError) as error:
+            return jsonify(ok=False, error=str(error))
+        return jsonify(ok=True, code=code)
+
+    @app.post("/api/setup/sheet")
+    def setup_sheet():
+        """Проверить адрес веб-приложения и записать его, если он рабочий."""
+        url = ((request.get_json(silent=True) or {}).get("url") or "").strip()
+        kind = setup.address_kind(url)
+
+        if kind == "таблица":
+            # Ошибку человека не выбрасываем: этот адрес и правда нужен — для
+            # кнопки «Таблица» в сайдбаре. Кладём его туда, где он к месту, и
+            # просим второй. Так путаница двух адресов не только объясняется,
+            # но и оборачивается заполненной строкой в .env.
+            config.save_env({"SHEET_LINK": url})
+            config.refresh_env(env)
+
+        if kind != "веб-приложение":
+            return jsonify(ok=False, ready=False, error=ADDRESS_TROUBLE[kind])
+
+        secret = env["sheet_secret"]
+        if not secret:
+            return jsonify(ok=False, ready=False,
+                           error="Секрета ещё нет — вернитесь к коду для "
+                                 "таблицы и скопируйте его заново.")
+        try:
+            found = sheet.fetch_categories(url, secret)
+        except Exception as error:
+            # Сюда приезжает и «нет доступа» от моста, и оборванная сеть, и
+            # страница входа в Google вместо JSON. Текст отказа мост уже
+            # сформулировал сам — передаём его как есть.
+            return jsonify(ok=False, ready=False,
+                           error=f"Таблица не ответила: {error}")
+
+        # Адрес рабочий — записываем, даже если со справочником что-то не так.
+        # Иначе человек, поправив A1, вставлял бы адрес заново.
+        config.save_env({"SHEET_URL": url})
+        config.refresh_env(env)
+
+        # Справочник уже прочитан — кладём его в кэш, чтобы первый же чек не
+        # пошёл в таблицу за тем же самым. Заодно из этого кэша сводка на
+        # экране готовности и пункт «Таблица» в сайдбаре берут своё число.
+        st["categories"] = found
+        st["categories_at"] = time.time()
+        memory.save(st)
+
+        answer = setup.categories_verdict(found, agent.seed_categories())
+        return jsonify(ok=True, ready=answer["ready"], count=answer["count"],
+                       note=answer["note"])
 
     @app.post("/api/say")
     def say():

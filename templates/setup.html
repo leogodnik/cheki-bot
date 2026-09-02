@@ -7,6 +7,23 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/favicon.png" sizes="32x32">
+<style>
+  /* Две строки, которым место в style.css, — но тот файл закрыт для правок,
+     и в срезе 4 такая же строка уже легла в шапку рабочего места.
+
+     Первая: .verdict сама объявляет display: flex, а авторское правило старше
+     браузерного [hidden] — без этой строки спрятанная плашка висит пустой
+     полосой. У соседних .step такое правило в style.css есть, у .verdict нет.
+
+     Вторая: у .bt нет вида «выключена». В мастере выключенные кнопки есть —
+     «Готово» до проверки таблицы и «Да, это он» до проверки токена, — и
+     кнопка, которая выглядит нажимаемой, но не нажимается, читается как
+     поломка мастера, а не как «сначала проверьте». */
+  .verdict[hidden] { display: none; }
+  .bt:disabled { opacity: .45; cursor: default; }
+  .bt:disabled:hover { background: var(--white); border-color: var(--line); }
+  .bt.go:disabled:hover { background: var(--hot); border-color: var(--hot); }
+</style>
 </head>
 <body>
 
@@ -124,12 +141,15 @@
         <div class="card">
           <div class="row">
             <span class="k">Таблица с обоими листами</span>
-            <a class="bt v" href="https://docs.google.com/spreadsheets/d/1cheki-shablon-primer/copy"
+            <a class="bt v" href="https://docs.google.com/spreadsheets/d/1in1MKkVs8JtqnRqCDbyD5eXVj0z1JMRpj-UGOROT7v4/copy"
                target="_blank" rel="noopener">Открыть шаблон</a>
           </div>
         </div>
-        <p class="note">В открывшейся таблице: <b>Файл → Создать копию</b>. Копия ваша,
-           менять в ней можно всё.</p>
+        <p class="note">Ссылка кончается на <code class="inline">/copy</code>, а не на
+           <code class="inline">/edit</code>: она не открывает чужую таблицу, а сразу
+           предлагает сделать вам вашу собственную. В копии уже есть оба листа с точными
+           именами, одиннадцать заголовков в нужном порядке, справочник из шестнадцати
+           статей и оформление. Копия ваша, менять в ней можно всё.</p>
       </div>
 
       <div class="grp">
@@ -138,45 +158,12 @@
            Всё, что там есть, удалите и вставьте это. Секретное слово уже вписано —
            придумывать и запоминать ничего не надо.</p>
 
-        <!-- В работающем мастере сюда подставляется sheet.gs целиком: программа читает
-             файл и меняет __СЕКРЕТ__ на сгенерированное значение. Здесь тот же код,
-             сокращённый до сути, чтобы экран оставался обозримым. -->
         <div class="code">
           <div class="code-top">
             <span>Apps Script</span>
             <button class="bt copy" type="button">Скопировать</button>
           </div>
-          <pre><code>const SECRET = 'k7m2-qp94-xr3v';
-
-function doPost(e) {
-  const d = JSON.parse(e.postData.contents);
-  if (d.secret !== SECRET) return reply({ok: false, error: 'нет доступа'});
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Расходы');
-  if (!sheet) return reply({ok: false, error: 'в таблице нет листа «Расходы»'});
-
-  sheet.appendRow([
-    d.date, d.amount, d.currency, d.merchant, d.category,
-    d.payment, d.source, d.who, d.status, d.file, new Date()
-  ]);
-  return reply({ok: true, row: sheet.getLastRow()});
-}
-
-function doGet(e) {
-  if (e.parameter.secret !== SECRET) return reply({ok: false, error: 'нет доступа'});
-
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Статьи');
-  if (!sheet) return reply({ok: false, error: 'в таблице нет листа «Статьи»'});
-
-  const last = sheet.getLastRow();
-  const rows = last &lt; 2 ? [] : sheet.getRange(2, 1, last - 1, 1).getValues();
-  return reply({ok: true, categories: rows.map(r => String(r[0]).trim()).filter(Boolean)});
-}
-
-function reply(o) {
-  return ContentService.createTextOutput(JSON.stringify(o))
-    .setMimeType(ContentService.MimeType.JSON);
-}</code></pre>
+          <pre><code id="w-code">Читаю sheet.gs…</code></pre>
         </div>
 
         <p class="note">Дальше: <b>Развернуть → Новое развёртывание → Веб-приложение</b>,
@@ -193,13 +180,13 @@ function reply(o) {
                    placeholder="https://script.google.com/macros/s/AKfy.../exec">
           </div>
           <div class="bts after-field">
-            <button class="bt" type="button">Проверить таблицу</button>
+            <button class="bt" type="button" id="w-check">Проверить таблицу</button>
           </div>
         </div>
 
-        <div class="verdict">
+        <div class="verdict" id="w-said" hidden>
           <svg class="mark"><use href="#mark"/></svg>
-          <span>Таблица отвечает. Прочитано <b>16 статей</b>.</span>
+          <span></span>
         </div>
 
         <p class="note">Число здесь важнее галочки. Ноль статей означает, что лист называется
@@ -209,7 +196,8 @@ function reply(o) {
 
       <div class="nav">
         <button class="bt big" type="button" data-go="s-engine">Назад</button>
-        <button class="bt go big grow" type="button" data-go="s-done">Готово</button>
+        <button class="bt go big grow" type="button" id="w-sheet-next"
+                data-go="s-done" disabled>Готово</button>
       </div>
     </section>
 

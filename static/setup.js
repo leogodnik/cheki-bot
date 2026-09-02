@@ -121,6 +121,37 @@
 
   loadEngines();
 
+  /* ═════════ Шаг 2. Таблица ═════════ */
+
+  /* Код для таблицы. Приезжает с сервера целиком, с уже подставленным
+     секретом: придумывать и запоминать человеку нечего, а кнопка
+     «Скопировать» рядом уже работает — она берёт текст из этого же узла. */
+  function loadScript() {
+    fetch("/api/setup/script")
+      .then(function (response) { return response.json(); })
+      .then(function (answer) {
+        document.getElementById("w-code").textContent =
+          answer.ok ? answer.code : answer.error;
+      })
+      .catch(function () {});
+  }
+
+  document.getElementById("w-check").addEventListener("click", function () {
+    var field = document.getElementById("webapp");
+    verdict("w-said", "Спрашиваю таблицу…");
+    ask("/api/setup/sheet", {url: field.value}).then(function (answer) {
+      verdict("w-said", answer.error || answer.note);
+      /* «Готово» открывается только когда справочник прочитан целиком.
+         Пропустить человека дальше с пятнадцатью статьями значит отдать ему
+         бота, который на первом же чеке напишет «Прочее». */
+      document.getElementById("w-sheet-next").disabled = !answer.ready;
+      /* Адрес таблицы мастер запомнил сам — поле освобождаем под второй. */
+      if (!answer.ok) field.select();
+    });
+  });
+
+  loadScript();
+
   /* Копирование без внешних библиотек: современный буфер обмена, а если страница
      открыта по file:// и он недоступен — старый способ через выделение. */
   document.querySelectorAll(".copy").forEach(function (btn) {
