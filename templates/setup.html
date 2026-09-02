@@ -7,23 +7,6 @@
 <link rel="stylesheet" href="/static/style.css">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/favicon.png" sizes="32x32">
-<style>
-  /* Две строки, которым место в style.css, — но тот файл закрыт для правок,
-     и в срезе 4 такая же строка уже легла в шапку рабочего места.
-
-     Первая: .verdict сама объявляет display: flex, а авторское правило старше
-     браузерного [hidden] — без этой строки спрятанная плашка висит пустой
-     полосой. У соседних .step такое правило в style.css есть, у .verdict нет.
-
-     Вторая: у .bt нет вида «выключена». В мастере выключенные кнопки есть —
-     «Готово» до проверки таблицы и «Да, это он» до проверки токена, — и
-     кнопка, которая выглядит нажимаемой, но не нажимается, читается как
-     поломка мастера, а не как «сначала проверьте». */
-  .verdict[hidden] { display: none; }
-  .bt:disabled { opacity: .45; cursor: default; }
-  .bt:disabled:hover { background: var(--white); border-color: var(--line); }
-  .bt.go:disabled:hover { background: var(--hot); border-color: var(--hot); }
-</style>
 </head>
 <body>
 
