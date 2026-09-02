@@ -1,8 +1,9 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["intent", "date", "amount", "currency", "merchant",
-               "category", "payment", "confidence", "doubts", "reply"],
+  "required": ["intent", "date", "amount", "amount_source", "currency",
+               "merchant", "category", "payment", "confidence", "doubts",
+               "reply"],
   "properties": {
     "intent": {
       "type": "string",
@@ -16,6 +17,11 @@
     "amount": {
       "type": ["number", "null"],
       "description": "Итоговая сумма в рублях и копейках. Если не прочиталась — null. Не угадывать."
+    },
+    "amount_source": {
+      "type": "string",
+      "enum": ["строка ИТОГ", "строка К ОПЛАТЕ", "сложены позиции", "не нашёл"],
+      "description": "Откуда взята сумма. Не оценка уверенности, а факт: с какой строки чека или как иначе она получена."
     },
     "currency": {
       "type": "string",

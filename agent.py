@@ -19,7 +19,7 @@ from engines import EngineError, claude_code
 
 BASE_DIR = Path(__file__).resolve().parent
 
-FIELDS = ("intent", "date", "amount", "currency", "merchant",
+FIELDS = ("intent", "date", "amount", "amount_source", "currency", "merchant",
           "category", "payment", "confidence", "doubts", "reply")
 
 INTENTS = ("расход", "правка", "не расход")

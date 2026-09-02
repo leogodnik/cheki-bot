@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 BIG_AMOUNT = 100000
 FALLBACK_CATEGORY = "Прочее"
+SUSPICIOUS_SOURCES = ("не нашёл", "сложены позиции")
 YEAR = timedelta(days=365)
 
 
@@ -39,6 +40,20 @@ def review(answer, categories, today):
     elif amount > BIG_AMOUNT:
         # Крупная трата стоит взгляда, даже если чек читался идеально.
         reasons.append(f"крупная сумма — {amount:.2f}")
+
+    # Число само по себе не подозрительно, и «не нашёл» само по себе тоже:
+    # это как раз честный ответ вместо угадывания. Подозрительна только их
+    # пара — сумма есть, а строки итога агент не видел. Порознь поля
+    # невинны, вместе они и есть выдумка, и confidence её не ловит: агент
+    # может быть «уверен» в числе, которое сам же и досочинил. «Сложены
+    # позиции» подозрительно даже на целом чеке — если строка ИТОГ на
+    # месте, складывать позиции вручную незачем.
+    amount_source = answer.get("amount_source")
+    if is_number(amount) and amount > 0 and amount_source in SUSPICIOUS_SOURCES:
+        reasons.append(
+            f"сумма {amount:.2f} есть, а итога на чеке агент не видел "
+            f"(amount_source: «{amount_source}»)"
+        )
 
     if answer.get("confidence") == "низкая":
         reasons.append("агент не уверен в прочитанном")

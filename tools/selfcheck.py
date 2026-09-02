@@ -66,6 +66,7 @@ today = date(2026, 8, 23)
 categories = ["Продукты", "Топливо", "Прочее"]
 clean = {
     "intent": "расход", "date": "2026-08-20", "amount": 1004.7,
+    "amount_source": "строка ИТОГ",
     "currency": "RUB", "merchant": "Пятёрочка", "category": "Продукты",
     "payment": "карта", "confidence": "высокая", "doubts": "",
     "reply": "Пятёрочка, 1004,70 ₽, продукты",
@@ -99,6 +100,28 @@ check("ровно сто тысяч проходят", verdict["status"] == "г�
 
 verdict = checks.review(dict(clean, amount=100000.01), categories, today)
 check("сумма больше ста тысяч ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount_source="не нашёл"), categories, today)
+check("сумма есть, а «не нашёл» — ловится даже при высокой уверенности",
+      verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount_source="сложены позиции"), categories, today)
+check("сумма есть, а «сложены позиции» — тоже ловится",
+      verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount_source="строка ИТОГ"), categories, today)
+check("строка ИТОГ — источник в порядке, статус остаётся «готово»",
+      verdict["status"] == "готово")
+
+verdict = checks.review(dict(clean, amount_source="строка К ОПЛАТЕ"), categories, today)
+check("строка К ОПЛАТЕ — источник тоже в порядке, статус остаётся «готово»",
+      verdict["status"] == "готово")
+
+verdict = checks.review(dict(clean, amount=None, amount_source="не нашёл"),
+                         categories, today)
+check("пустая сумма с «не нашёл» — это просто честный null, ловится как раньше",
+      verdict["status"] == "проверить"
+      and "сумма не прочиталась" in verdict["reasons"])
 
 verdict = checks.review(dict(clean, confidence="низкая"), categories, today)
 check("низкая уверенность ловится", verdict["status"] == "проверить")
