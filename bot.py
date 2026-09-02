@@ -5,12 +5,14 @@
 """
 
 import json
+import threading
 import time
 
 import requests
 
 import config
 import state as memory
+import web
 
 from datetime import date, datetime
 
@@ -243,31 +245,46 @@ def handle(env, st, message, channel, author):
     say(env["bot_token"], chat_id, reply_text(answer, verdict, written))
 
 
+def telegram_loop(env, st, jobs):
+    """Опрос телеграма. Своим потоком, потому что главный занят страницей."""
+    print("Телеграм: жду сообщений.")
+    while True:
+        try:
+            updates = get_updates(env["bot_token"], st["offset"])
+        except (requests.RequestException, RuntimeError, ValueError) as error:
+            # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
+            print(f"телеграм не отвечает ({error}), жду пять секунд")
+            time.sleep(5)
+            continue
+        for update in updates:
+            st["offset"] = update["update_id"] + 1
+            message = update.get("message")
+            if message:
+                try:
+                    handle(env, st, message, "телеграм", who(message))
+                except Exception as error:
+                    # Одно сломанное сообщение не должно останавливать бота:
+                    # offset уже сдвинут, следующее разберётся.
+                    print(f"сообщение не обработалось: {error}")
+            memory.save(st)
+
+
 def main():
     env = config.load_env()
     config.refuse_if_api_key()
     st = memory.load()
-    print("Бот запущен, жду сообщений. Ctrl+C — выход.")
+    jobs = None  # очередь заданий появится в задаче 3
+
+    threading.Thread(target=telegram_loop, args=(env, st, jobs),
+                     daemon=True).start()
+
+    web.quiet()
+    port = web.choose_port()
+    print(f"Рабочее место: http://127.0.0.1:{port}")
+    print("Ctrl+C — выход.")
     try:
-        while True:
-            try:
-                updates = get_updates(env["bot_token"], st["offset"])
-            except (requests.RequestException, RuntimeError, ValueError) as error:
-                # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
-                print(f"телеграм не отвечает ({error}), жду пять секунд")
-                time.sleep(5)
-                continue
-            for update in updates:
-                st["offset"] = update["update_id"] + 1
-                message = update.get("message")
-                if message:
-                    try:
-                        handle(env, st, message, "телеграм", who(message))
-                    except Exception as error:
-                        # Одно сломанное сообщение не должно останавливать бота:
-                        # offset уже сдвинут, следующее разберётся.
-                        print(f"сообщение не обработалось: {error}")
-                memory.save(st)
+        web.create(env, st, jobs).run(host="127.0.0.1", port=port,
+                                      threaded=True, use_reloader=False)
     except KeyboardInterrupt:
         print("\nОстанавливаюсь.")
 

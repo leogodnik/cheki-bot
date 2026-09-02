@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чеки — рабочее место</title>
-<link rel="stylesheet" href="../static/style.css">
+<link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="fixed">
 
@@ -52,32 +52,26 @@
     </button>
 
     <!-- Таблица не подменяет ленту: она открывает саму таблицу в новой вкладке. -->
-    <a class="nv" href="https://docs.google.com/spreadsheets/d/1cheki-primer/edit" target="_blank" rel="noopener">
-      <svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r">16 статей</span>
+    <a class="nv" id="nav-table" target="_blank" rel="noopener">
+      <svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r"></span>
     </a>
 
-    <button class="nv" type="button" data-pane="people">
-      <svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r">2</span>
+    <button class="nv" type="button" id="nav-people" data-pane="people" hidden>
+      <svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r"></span>
     </button>
 
-    <button class="nv" type="button" data-pane="telegram">
-      <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot" title="подключён"></span>
+    <button class="nv" type="button" id="nav-telegram" data-pane="telegram" hidden>
+      <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot off"></span>
     </button>
 
-    <button class="nv" type="button" data-pane="engine">
-      <svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r">Claude Code</span>
+    <button class="nv" type="button" id="nav-engine" data-pane="engine" hidden>
+      <svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r"></span>
     </button>
 
     <div class="hd">Записи сегодня<svg class="ic"><use href="#i-sliders"/></svg></div>
 
     <div class="scroll">
-      <div id="today">
-        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Пятёрочка</span><span class="am">1 040,00</span></button>
-        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Такси · Мария</span><span class="am">450,00</span></button>
-        <button class="li" type="button" data-pane="feed"><span class="bl chk"></span><span class="nm">АЗС Лукойл</span><span class="am">—</span></button>
-        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Комус, канцелярия</span><span class="am">4 780,00</span></button>
-        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Обед с клиентом</span><span class="am">2 400,00</span></button>
-      </div>
+      <div id="today"></div>
 
       <!-- Первый запуск: приглашение, а не пустота. -->
       <p class="li-none" id="today-none" hidden>
@@ -112,62 +106,7 @@
 
     <section class="pane" id="p-feed">
       <div class="flow">
-        <div class="col">
-
-          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>чек-пятёрочка.jpg</span></div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Пятёрочка · 1 004,70 ₽</b></div>
-            <div class="sub">продукты · картой · 20 августа — <em>строка 47</em></div>
-          </div>
-
-          <div class="u">не 1004, а 1040</div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Поправил сумму: 1 004,70 → 1 040,00</b></div>
-            <div class="sub">Пятёрочка · продукты · картой — <em>строка 47</em></div>
-          </div>
-
-          <div class="b">
-            <div class="src">из телеграма · Мария</div>
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Такси · 450,00 ₽</b></div>
-            <div class="sub">транспорт и такси · наличными — <em>строка 48</em></div>
-          </div>
-
-          <div class="u">не 450, а 480</div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Строку 48 записала Мария из телеграма — не трогаю.</b></div>
-            <div class="sub">здесь правится только то, что записано отсюда</div>
-          </div>
-
-          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>чек-пятёрочка.jpg</span></div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Этот чек уже записан — <em>строка 47</em></b></div>
-            <div class="sub">такой же файл приходил сегодня в 11:20</div>
-          </div>
-
-          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>заправка.jpg</span></div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>АЗС Лукойл · 21 августа</b></div>
-            <div class="sub"><span class="warn">итог срезан, сумму впишите сами</span> — <em>строка 49, на проверку</em></div>
-          </div>
-
-          <div class="b">
-            <div class="src">из телеграма · Мария</div>
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Голосовые не умею.</b></div>
-            <div class="sub">напишите текстом или пришлите фото чека</div>
-          </div>
-
-          <div class="u">не 4780, а 4800</div>
-          <div class="b">
-            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Строка изменилась — поправьте в таблице руками.</b></div>
-            <div class="sub">в строке 50 сейчас не «Комус» на 4 780,00, а что-то другое: похоже,
-              строки в таблице сдвинули</div>
-          </div>
-
-          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>кофейня.jpg</span></div>
-          <div class="b"><div class="hdr"><svg class="mark"><use href="#mark"/></svg>
-            <span class="run">Смотрю чек… <small>15–50 сек</small></span></div></div>
-
-        </div>
+        <div class="col"></div>
       </div>
 
       <div class="foot">
@@ -176,7 +115,7 @@
           <textarea class="in" id="say" rows="1" placeholder="Перетащите чек или напишите тратой"></textarea>
           <div class="bar">
             <button class="add" type="button" title="Прикрепить чек"><svg class="ic"><use href="#i-plus"/></svg></button>
-            <button class="rt" type="button">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></button>
+            <button class="rt engine-badge" type="button" disabled></button>
           </div>
         </div>
       </div>
@@ -186,13 +125,13 @@
 
     <section class="pane" id="p-empty" hidden>
       <div class="hero">
-        <div class="greet"><svg class="mark"><use href="#mark"/></svg><h1>Что записываем, Леонид?</h1></div>
+        <div class="greet"><svg class="mark"><use href="#mark"/></svg><h1 id="greeting">Что записываем?</h1></div>
         <div class="box">
           <label for="say2" hidden>Новый расход</label>
           <textarea class="in" id="say2" rows="1" placeholder="Перетащите чек или напишите тратой"></textarea>
           <div class="bar">
             <button class="add" type="button" title="Прикрепить чек"><svg class="ic"><use href="#i-plus"/></svg></button>
-            <button class="rt" type="button">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></button>
+            <button class="rt engine-badge" type="button" disabled></button>
           </div>
         </div>
         <div class="drophint">Фотографию чека можно просто перетащить в окно</div>
@@ -317,73 +256,11 @@
       </div></div>
     </section>
 
+  <input id="pick" type="file" accept="image/jpeg,image/png" hidden>
   </main>
 </div>
 
-<nav class="demo" aria-label="Навигация по макету">
-  <span class="lbl">Макет</span>
-  <button type="button" data-pane="feed" aria-current="true">лента</button>
-  <button type="button" data-pane="empty">пустое начало</button>
-  <button type="button" data-pane="people">кто пишет</button>
-  <button type="button" data-pane="telegram">телеграм</button>
-  <button type="button" data-pane="engine">движок</button>
-  <button type="button" data-pane="blocked">ключ в окружении</button>
-  <button type="button" id="toggle-today">записи: пусто</button>
-  <a class="last" href="setup.html">мастер ↗</a>
-</nav>
-
-<script>
-  (function () {
-    var app = document.getElementById("app");
-    var panes = document.querySelectorAll(".pane");
-    var navs = document.querySelectorAll(".nv[data-pane]");
-    var demos = document.querySelectorAll(".demo button[data-pane]");
-
-    function show(name) {
-      panes.forEach(function (p) { p.hidden = p.id !== "p-" + name; });
-      /* «Пустое начало» — то же «Новый расход», поэтому пункт сайдбара остаётся
-         подсвеченным на обоих состояниях ленты. */
-      var lit = (name === "empty") ? "feed" : name;
-      navs.forEach(function (n) { n.setAttribute("aria-current", String(n.dataset.pane === lit)); });
-      demos.forEach(function (d) { d.setAttribute("aria-current", String(d.dataset.pane === name)); });
-      app.classList.remove("menu-open");
-      var sc = document.querySelector(".pane:not([hidden]) .flow, .pane:not([hidden]) .sheet");
-      if (sc) sc.scrollTop = 0;
-    }
-
-    document.querySelectorAll("[data-pane]").forEach(function (el) {
-      el.addEventListener("click", function () { show(el.dataset.pane); });
-    });
-
-    var burger = document.getElementById("burger");
-    burger.addEventListener("click", function () {
-      var open = app.classList.toggle("menu-open");
-      burger.setAttribute("aria-expanded", String(open));
-    });
-
-    var today = document.getElementById("today");
-    var none = document.getElementById("today-none");
-    var toggle = document.getElementById("toggle-today");
-    toggle.addEventListener("click", function () {
-      var empty = today.hidden;
-      today.hidden = !empty;
-      none.hidden = empty;
-      toggle.textContent = empty ? "записи: пусто" : "записи: есть";
-    });
-
-    var flow = document.querySelector("#p-feed .flow");
-    if (flow) flow.scrollTop = flow.scrollHeight;
-
-    /* Перетаскивание файла подсвечивает поле ввода. Ничего никуда не отправляется:
-       это макет. */
-    ["dragenter", "dragover"].forEach(function (t) {
-      document.addEventListener(t, function (e) { e.preventDefault(); app.classList.add("dragging"); });
-    });
-    ["dragleave", "drop"].forEach(function (t) {
-      document.addEventListener(t, function (e) { e.preventDefault(); app.classList.remove("dragging"); });
-    });
-  })();
-</script>
+<script src="/static/app.js"></script>
 
 </body>
 </html>
