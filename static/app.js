@@ -123,6 +123,23 @@
     return node;
   }
 
+  /* Отправка настройки. Ответ несёт свежий снимок состояния, и сайдбар
+     перерисовывается им сразу, не дожидаясь ближайшего опроса: три секунды
+     между нажатием и результатом ощущаются как поломка, и человек жмёт второй
+     раз. */
+  function post(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body || {})
+    })
+      .then(function (response) { return response.json(); })
+      .then(function (answer) {
+        if (answer.state) paint(answer.state);
+        return answer;
+      });
+  }
+
   /* Иконку рисуем ссылкой на <symbol> в шапке страницы — те же значки, что
      в эталоне. className у SVG только для чтения, поэтому setAttribute. */
   function icon(name) {
@@ -382,7 +399,8 @@
       sub.appendChild(el("span", "warn", trouble[0]));
       sub.appendChild(document.createTextNode(" — "));
     } else {
-      var facts = join([event.category, PAYMENTS[event.payment], day(event.date)]);
+      var facts = join([event.category, PAYMENTS[event.payment], day(event.date),
+                        event.engine]);
       sub.appendChild(document.createTextNode(facts ? facts + " — " : ""));
     }
     if (event.row) {
@@ -423,8 +441,8 @@
   }
 
   /* Сайдбар. Здесь только то, что уже посчитано где-то ещё: имя из настроек,
-     статьи из кэша справочника, движок из settings.json. Управление ими —
-     срез 4, до тех пор их пункты в разметке скрыты. */
+     статьи из кэша справочника, движок и белый список из settings.json.
+     Источник один — снимок состояния, приезжающий с каждым опросом ленты. */
   function paint(state) {
     greeting.textContent = state.owner
       ? "Что записываем, " + state.owner + "?"
@@ -445,6 +463,146 @@
     document.querySelectorAll(".engine-badge").forEach(function (badge) {
       badge.textContent = state.engine;
     });
+
+    drawPeople(state);
+    drawEngine(state);
+    drawTelegram(state);
+  }
+
+  /* Строка карточки: подпись, значение, серая пометка справа.
+
+     Класс значения приходит снаружи, потому что .nick — терракотовый, а
+     терракота в этом проекте значит «взгляни», и только это. Ник бота ею
+     набран по праву: это имя, за которое цепляется глаз. Фраза «чеки
+     принимает браузер» — обычное рабочее состояние, глядеть там не на что,
+     и терракотовой она быть не должна. */
+  function fact(key, value, cls, stamp) {
+    var row = el("div", "row");
+    row.appendChild(el("span", "k", key));
+    row.appendChild(el("span", "v " + cls, value));
+    if (stamp) row.appendChild(el("span", "stamp", stamp));
+    return row;
+  }
+
+  /* Раздел «Телеграм». Перерисовывается на каждом опросе, поэтому здесь
+     только текст и видимость — ни одного нового узла с полем ввода и ни
+     одного нового обработчика.
+
+     Иначе строка, которую человек набирает, стиралась бы каждые три секунды,
+     а обработчики множились бы до тех пор, пока одно нажатие не отправило бы
+     двадцать запросов. Форма стоит в разметке, живёт всегда и только
+     прячется. */
+  function drawTelegram(state) {
+    var facts = document.getElementById("tg-facts");
+    facts.textContent = "";
+    if (state.telegram) {
+      facts.appendChild(fact("Подключён", "@" + state.bot, "nick", "опрос идёт"));
+      /* Имя хозяина — не ник: набирать его моноширинной терракотой не за что. */
+      if (state.owner) facts.appendChild(fact("Владелец", state.owner, "", ""));
+    } else {
+      facts.appendChild(fact("Не подключён", "чеки принимает браузер",
+                             "noname", ""));
+    }
+
+    document.getElementById("tg-open").textContent =
+      state.telegram ? "Заменить бота" : "Подключить бота";
+    document.getElementById("tg-form-head").textContent =
+      state.telegram ? "Заменить бота" : "Токен бота";
+    document.getElementById("tg-save").textContent =
+      state.telegram ? "Заменить" : "Подключить";
+    document.getElementById("tg-off").hidden = !state.telegram;
+    document.getElementById("tg-conseq").hidden = !state.telegram;
+
+    /* Зелёная точка значит «работает». Терракота значила бы «взгляни», а
+       здесь глядеть не на что. */
+    document.querySelector("#nav-telegram .dot").className =
+      state.telegram ? "dot" : "dot off";
+  }
+
+  /* Переключатель движка. Строится из того же ответа, что и первый шаг
+     мастера: список движков и версия у каждого. Пустая версия значит «не
+     установлен» — точку гасим и не даём нажать. */
+  function drawEngine(state) {
+    var card = document.getElementById("engine-picks");
+    card.textContent = "";
+
+    Object.keys(state.engines || {}).forEach(function (key) {
+      var version = state.engines[key];
+      var pick = el("label", "pick");
+      var dot = document.createElement("input");
+      dot.type = "radio";
+      dot.name = "engine";
+      dot.value = key;
+      dot.checked = key === state.engine_key;
+      dot.disabled = !version;
+      dot.addEventListener("change", function () { post("/api/engine", {engine: key}); });
+      pick.appendChild(dot);
+      pick.appendChild(el("span", "nm", state.titles[key] || key));
+      pick.appendChild(el("span", "tag", version || "не установлен"));
+      card.appendChild(pick);
+    });
+
+    /* Выбранный движок мог исчезнуть после установки: переименовали, снесли,
+       сменили PATH. Выбор человека при этом не гасим — не наше дело менять
+       его молча, — но сказать, что читать чеки сейчас нечем, обязаны.
+       Терракота значит «взгляни», и это ровно тот случай. */
+    var gone = document.getElementById("engine-gone");
+    var missing = state.engine_key && !(state.engines || {})[state.engine_key];
+    gone.hidden = !missing;
+    if (missing) {
+      gone.querySelector("span").textContent =
+        state.engine + " не отвечает в терминале. Чеки сейчас не разбираются: "
+        + "поставьте его заново или выберите другой движок.";
+    }
+  }
+
+  /* Одна строка списка. Ник показываем, когда он есть; когда нет — имя из
+     профиля и пометку «ника нет»: заводить ник в телеграме необязательно.
+
+     Числовой идентификатор не показывается никогда, хотя работает бот именно
+     по нему. Он живёт в замыкании кнопки и уезжает обратно на сервер. */
+  function person(record, label, path, hot) {
+    var row = el("div", "row");
+    row.appendChild(el("span", "k", record.name || "без имени"));
+    row.appendChild(record.username
+      ? el("span", "v nick", "@" + record.username)
+      : el("span", "v noname", "ника нет"));
+    var button = el("button", "bt" + (hot ? " go" : ""), label);
+    button.type = "button";
+    button.addEventListener("click", function () {
+      /* Пока сервер думает, второе нажатие впустило бы человека дважды. */
+      button.disabled = true;
+      post(path, {id: record.id}).then(function (answer) {
+        if (!answer.ok) button.disabled = false;
+      });
+    });
+    row.appendChild(button);
+    return row;
+  }
+
+  /* Раздел «Кто может писать» целиком. Источник один — снимок состояния;
+     второго списка людей на клиенте нет и быть не должно. */
+  function drawPeople(state) {
+    var allowed = document.getElementById("allowed");
+    var knocked = document.getElementById("knocked");
+    allowed.textContent = "";
+    knocked.textContent = "";
+
+    (state.allowed || []).forEach(function (record) {
+      allowed.appendChild(person(record, "Убрать", "/api/people/remove", false));
+    });
+    (state.knocked || []).forEach(function (record) {
+      knocked.appendChild(person(record, "Впустить", "/api/people/allow", true));
+    });
+
+    document.getElementById("knocked-head").hidden = !(state.knocked || []).length;
+    document.getElementById("people-none").hidden =
+      (state.allowed || []).length + (state.knocked || []).length > 0;
+
+    var count = document.querySelector("#nav-people .r");
+    count.textContent = (state.knocked || []).length
+      ? (state.allowed || []).length + " · стучится " + state.knocked.length
+      : String((state.allowed || []).length || "");
   }
 
   /* Список того, что записано сегодня. Собирается из тех же событий, что и
@@ -514,8 +672,18 @@
     }
     if (answer.state) paint(answer.state);
     drawToday();
-    /* Пустое начало и лента — одно место в двух состояниях. */
-    show(col.children.length ? "feed" : "empty");
+    /* Пустое начало и лента — одно место в двух состояниях, и переключать их
+       надо: первая запись обязана убрать приглашение.
+
+       Но только если человек сейчас там. Пока разделы сайдбара были скрыты,
+       уйти из ленты было некуда, и эта строка стояла без условия. Срез 4
+       открыл три раздела — и без проверки опрос выбрасывал бы человека из
+       «Кто может писать» обратно в ленту каждые три секунды, посреди
+       набранного токена. */
+    if (!document.getElementById("p-feed").hidden ||
+        !document.getElementById("p-empty").hidden) {
+      show(col.children.length ? "feed" : "empty");
+    }
   }
 
   /* Раз в три секунды. Вебсокетов нет намеренно: на локальном адресе опрос
@@ -677,6 +845,43 @@
   pick.addEventListener("change", function () {
     if (pick.files.length) sendFiles(pick.files);
     pick.value = "";   /* иначе тот же файл второй раз не выберется */
+  });
+
+  var tgForm = document.getElementById("tg-form");
+  var tgToken = document.getElementById("newtok");
+  var tgSaid = document.getElementById("tg-said");
+
+  function tgSay(text) {
+    tgSaid.querySelector("span").textContent = text;
+    tgSaid.hidden = !text;
+  }
+
+  document.getElementById("tg-open").addEventListener("click", function () {
+    tgForm.hidden = false;
+    tgSay("");
+    tgToken.focus();
+  });
+
+  document.getElementById("tg-cancel").addEventListener("click", function () {
+    tgForm.hidden = true;
+    tgToken.value = "";
+    tgSay("");
+  });
+
+  document.getElementById("tg-save").addEventListener("click", function () {
+    var token = tgToken.value.trim();
+    if (!token) { tgSay("Вставьте токен от @BotFather."); return; }
+    tgSay("Спрашиваю телеграм…");
+    post("/api/telegram/save", {token: token}).then(function (answer) {
+      if (!answer.ok) { tgSay(answer.error); return; }
+      tgToken.value = "";
+      tgForm.hidden = true;
+      tgSay("");
+    });
+  });
+
+  document.getElementById("tg-off").addEventListener("click", function () {
+    post("/api/telegram/off", {});
   });
 
   poll();

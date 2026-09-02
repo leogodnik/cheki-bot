@@ -31,6 +31,15 @@ DOUBTFUL = BASE_DIR / "чеки" / "спорные"
 def accept(env, st, job):
     """Путь сообщения от входа до строки в таблице. Возвращает события ленты."""
     settings = config.load_settings()
+
+    # Проверка стоит здесь, а не только при получении. «Убрал» обязано значить
+    # «больше не пишет в мою таблицу», иначе кнопка обманывает. Цена — одна
+    # проверка в начале разбора; выгода — кнопка означает то, что написано.
+    if job["channel"] == "телеграм" and \
+            job.get("user_id") not in config.allowed_ids(settings):
+        return [sign({"kind": "слово", "text": "Больше не записываю.",
+                      "note": "Хозяин таблицы закрыл доступ."}, job)]
+
     events = []
 
     # Отложенные строки уезжают при первой возможности — раньше, чем новая.
@@ -142,6 +151,9 @@ def accept(env, st, job):
         "amount": amount,
         "currency": answer["currency"],
         "category": verdict["category"],
+        # Чем разобрано. Не ключ, а название: событие уезжает и в чат, и в
+        # браузер, и там и там его читает человек.
+        "engine": agent.TITLES.get(settings["engine"], settings["engine"]),
         "payment": answer["payment"],
         "date": answer["date"],
         "row": number,

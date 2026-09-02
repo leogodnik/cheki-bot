@@ -19,6 +19,8 @@ import agent
 import config
 import feed
 import intake
+import state as memory
+import telegram
 
 FIRST_PORT = 8765
 LAST_PORT = 8775
@@ -69,6 +71,13 @@ def create(env, st, jobs, blocked=""):
         return jsonify(events=fresh, last=last, life=feed.LIFE,
                        state=snapshot(env, st, blocked))
 
+    @app.get("/api/engines")
+    def engines():
+        """Что установлено. Отдельно от снимка состояния, потому что кнопка
+        «Проверить снова» в мастере должна спросить заново, а не получить
+        минутный кэш."""
+        return jsonify(engines=agent.versions(fresh=True), titles=agent.TITLES)
+
     @app.post("/api/say")
     def say():
         """Приём из браузера: фотография или текст.
@@ -101,6 +110,123 @@ def create(env, st, jobs, blocked=""):
                "author": author, "chat_id": None, "file": "", "mark": ""}
         return jsonify(published(start(jobs, job, {"kind": "мой", "text": text})))
 
+    @app.post("/api/people/allow")
+    def allow():
+        """Впустить постучавшегося.
+
+        Строка переезжает из «стучались» в белый список, а не копируется:
+        человек не может быть в двух списках сразу, и глазами это должно быть
+        видно сразу же."""
+        wanted = str((request.get_json(silent=True) or {}).get("id", ""))
+        settings = config.load_settings()
+        knocked = settings.get("knocked", [])
+        found = [person for person in knocked if str(person.get("id")) == wanted]
+        if not found:
+            return jsonify(ok=False,
+                           error="этого человека уже нет среди стучавшихся")
+        settings["knocked"] = [person for person in knocked
+                               if str(person.get("id")) != wanted]
+        settings["allowed"] = settings.get("allowed", []) + [{
+            "id": found[0]["id"],
+            "username": found[0].get("username", ""),
+            "name": found[0].get("name", ""),
+        }]
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
+    @app.post("/api/people/remove")
+    def remove():
+        """Убрать из белого списка.
+
+        В «стучались» человека не возвращаем: он ничего не сделал, чтобы туда
+        попасть заново, а строка с кнопкой «Впустить» выглядела бы как
+        приглашение передумать. Напишет ещё раз — появится сам."""
+        wanted = str((request.get_json(silent=True) or {}).get("id", ""))
+        settings = config.load_settings()
+        settings["allowed"] = [person for person in settings.get("allowed", [])
+                               if str(person.get("id")) != wanted]
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
+    @app.post("/api/engine")
+    def engine():
+        """Переключить движок.
+
+        Проверяем две вещи: что такой движок вообще есть за швом и что он
+        отвечает в терминале. Второе важнее: записать в settings.json движок,
+        которого нет, — значит получить отказ на каждом следующем чеке, и
+        человек будет искать причину в чеке."""
+        wanted = (request.get_json(silent=True) or {}).get("engine", "")
+        if wanted not in agent.ENGINES:
+            return jsonify(ok=False, error="такого движка нет")
+        if not agent.versions().get(wanted):
+            return jsonify(ok=False,
+                           error=f"{agent.TITLES[wanted]} не отвечает в терминале")
+        settings = config.load_settings()
+        settings["engine"] = wanted
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
+    @app.post("/api/telegram/check")
+    def telegram_check():
+        """Спросить у телеграма, чей это токен. Ничего не сохраняем.
+
+        Проверка отдельно от сохранения потому, что человеку показывают имя
+        бота и спрашивают «это он?». Половина ошибок с токеном — вставили не
+        ту строку, и увидеть это надо до того, как опрос уедет не туда."""
+        token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+        if not token:
+            return jsonify(ok=False,
+                           error="Пустая строка. Вставьте токен от @BotFather — "
+                                 "длинную строку с двоеточием посередине.")
+        try:
+            username = telegram.check_token(token)
+        except Exception as error:
+            # Ловим широко нарочно: сюда приезжает и отказ телеграма, и
+            # оборванная сеть, и мусор вместо JSON. Человеку во всех трёх
+            # случаях нужно одно и то же — что строка не подошла.
+            return jsonify(ok=False, error=f"Телеграм не принял этот токен: {error}")
+        return jsonify(ok=True, username=username)
+
+    @app.post("/api/telegram/save")
+    def telegram_save():
+        """Подключить бота или заменить его.
+
+        offset сбрасывается здесь, а не в опросе, и это главное в маршруте:
+        у каждого бота своя нумерация обновлений. Оставить чужой номер значит
+        либо получить отказ, либо — хуже — тишину, в которой бот выглядит
+        подключённым и не отвечает."""
+        token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+        try:
+            username = telegram.check_token(token)
+        except Exception as error:
+            return jsonify(ok=False, error=f"Телеграм не принял этот токен: {error}")
+
+        config.save_env({"BOT_TOKEN": token})
+        config.refresh_env(env)
+
+        settings = config.load_settings()
+        settings["bot"] = username
+        config.save_settings(settings)
+
+        st["offset"] = 0
+        memory.save(st)
+        return jsonify(ok=True, username=username,
+                       state=snapshot(env, st, blocked))
+
+    @app.post("/api/telegram/off")
+    def telegram_off():
+        """Отключить телеграм. Белый список остаётся нетронутым.
+
+        Телеграм опознаёт человека одним номером у всех ботов, и стирать
+        список при отключении значило бы наказать хозяина за передумывание.
+        Рабочее место без телеграма работает полностью."""
+        config.save_env({"BOT_TOKEN": ""})
+        config.refresh_env(env)
+        st["offset"] = 0
+        memory.save(st)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
     return app
 
 
@@ -116,7 +242,16 @@ def snapshot(env, st, blocked):
         "categories": len(st["categories"]),
         "sheet_link": env["sheet_link"],
         "engine": agent.TITLES.get(settings["engine"], settings["engine"]),
+        # Ключ движка, а не название: по нему отмечается точка в переключателе.
+        # Поле engine при этом остаётся названием — его читает бейдж в поле
+        # ввода, и переименовать его значит без нужды тронуть чужой код.
+        "engine_key": settings["engine"],
+        "engines": agent.versions(),
+        "titles": agent.TITLES,
+        "allowed": settings.get("allowed", []),
+        "knocked": settings.get("knocked", []),
         "telegram": bool(env["bot_token"]),
+        "bot": (settings.get("bot") or "").strip(),
         "blocked": blocked,
     }
 

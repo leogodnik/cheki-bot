@@ -15,19 +15,32 @@ settings.json перечитывается перед каждым сообще�
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_PATH = BASE_DIR / "settings.json"
+ENV_PATH = BASE_DIR / ".env"
+
+# Пишут настройки два потока: веб-запрос и — при замене бота — опрос
+# телеграма. Без замка они затрут запись друг друга на середине.
+_WRITE_LOCK = threading.Lock()
 
 # Телеграм необязателен: рабочее место в браузере работает без него. Без
 # таблицы бот бессмыслен — писать будет некуда.
 REQUIRED_ENV = ("SHEET_URL", "SHEET_SECRET")
 
 # Пустой белый список — безопасное состояние: бот не отвечает никому.
-DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": ""}
+#
+# Ник подключённого бота лежит здесь, а не в state.json, по тому же признаку,
+# по какому разведены эти два файла: удаление state.json не должно ничего
+# значить для человека, а «как зовут моего бота» — значит. Спрашивать getMe
+# на каждом опросе ради этой строки было бы платой в сеть за то, что меняется
+# раз в год.
+DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": "",
+            "bot": ""}
 
 
 def load_env():
@@ -39,12 +52,85 @@ def load_env():
             "В .env не заполнено: " + ", ".join(missing) + ".\n"
             "Возьмите образец: cp .env.example .env"
         )
+    return read_env()
+
+
+def read_env():
+    """Секреты из окружения словарём. Без проверок и без чтения файла —
+    файл читает load_env(), а обновляет окружение save_env()."""
     return {
         "bot_token": os.getenv("BOT_TOKEN", "").strip(),
-        "sheet_url": os.environ["SHEET_URL"],
-        "sheet_secret": os.environ["SHEET_SECRET"],
-        "sheet_link": os.getenv("SHEET_LINK", ""),
+        "sheet_url": os.getenv("SHEET_URL", "").strip(),
+        "sheet_secret": os.getenv("SHEET_SECRET", "").strip(),
+        "sheet_link": os.getenv("SHEET_LINK", "").strip(),
     }
+
+
+def refresh_env(env):
+    """Обновляет чужой словарь env на месте, из окружения.
+
+    Именно на месте, а не новым словарём. Этот словарь держат у себя все три
+    потока — веб, опрос телеграма и разбор. Присвоить переменной новый словарь
+    в одном месте значит оставить два потока со старым и потом полдня искать,
+    почему бот ходит в прежнюю таблицу."""
+    env.update(read_env())
+
+
+def patch_env_text(text, pairs):
+    """Новый текст .env: значения из pairs заменены, остальное как было.
+
+    Файл правится построчно, а не собирается заново. Причина не в
+    аккуратности: .env — не только машинная память, в нём комментарии,
+    объясняющие человеку, что за строка и откуда её взять. Собрать файл
+    заново значит стереть их, и следующий, кто откроет .env, увидит четыре
+    голых ключа без единого слова.
+
+    Строки с решёткой пропускаются целиком: в .env.example закомментированы
+    примеры вида «# SHEET_URL=…», и без этой проверки мастер вписал бы адрес
+    в пример, а настоящая строка осталась бы пустой.
+
+    Ключа в файле не нашлось — строка дописывается в конец. Значение
+    вписывается без кавычек: токен, адрес и секрет из secrets.token_urlsafe
+    в них не нуждаются, а лишние python-dotenv вернёт как часть значения."""
+    lines = text.splitlines()
+    written = set()
+    for number, line in enumerate(lines):
+        if line.lstrip().startswith("#"):
+            continue
+        name = line.split("=", 1)[0].strip()
+        if name in pairs:
+            lines[number] = f"{name}={pairs[name]}"
+            written.add(name)
+    for name, value in pairs.items():
+        if name not in written:
+            lines.append(f"{name}={value}")
+    return "\n".join(lines) + "\n"
+
+
+def save_env(pairs):
+    """Правит .env и тут же обновляет окружение процесса.
+
+    Файла нет — берём за образец .env.example: в нём те же ключи и те же
+    объяснения, ради которых файл и правится построчно. Нет и образца — пишем
+    с пустого места. Пустая папка — обычный случай, а не поломка: ровно так
+    ученик и начинает.
+
+    os.environ обновляется здесь же, потому что python-dotenv читает файл один
+    раз при старте и второй раз не станет. Без этой строки настройка легла бы
+    на диск, а работающий бот продолжил бы жить со старым значением до
+    перезапуска — ровно то, чего мы обещали не делать."""
+    with _WRITE_LOCK:
+        path = ENV_PATH.resolve()
+        try:
+            text = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            example = BASE_DIR / ".env.example"
+            text = example.read_text(encoding="utf-8") if example.exists() else ""
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(patch_env_text(text, pairs), encoding="utf-8")
+        tmp.replace(path)
+    for name, value in pairs.items():
+        os.environ[name] = value
 
 
 def api_key_in_env():
@@ -83,6 +169,28 @@ def load_settings():
               "пока файл не починят.")
         return json.loads(json.dumps(DEFAULTS))
     return settings
+
+
+def save_settings(settings):
+    """Пишет settings.json. Единственное место записи: ни web.py, ни bot.py
+    этот файл сами не открывают — иначе через месяц мест будет три, и два из
+    них без замка.
+
+    Через временный файл: Ctrl+C посреди записи не должен оставить огрызок,
+    из которого бот потом никого не впустит.
+
+    resolve() здесь обязателен, и это не украшение. В рабочих деревьях
+    (git worktree) settings.json и .env — символические ссылки на общие файлы.
+    replace() по ссылке заменил бы саму ссылку обычным файлом: дерево тихо
+    отвязалось бы от общих настроек и дальше правило свою копию, а человек
+    узнал бы об этом через день, не найдя вчерашней правки. Разрешаем ссылку
+    и пишем рядом с целью."""
+    with _WRITE_LOCK:
+        path = SETTINGS_PATH.resolve()
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2),
+                       encoding="utf-8")
+        tmp.replace(path)
 
 
 def allowed_ids(settings):

@@ -8,14 +8,15 @@
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/static/favicon.png" sizes="32x32">
 <style>
-  /* Правильная правка тут — одна строка в style.css: .nv[hidden] { display: none; }
-     Но тот файл не наш: владелец его закрыл для правок. .nv сама объявляет
-     display: flex, а это авторское правило старше браузерного [hidden], поэтому
-     три скрытых пункта сайдбара («Кто может писать», «Телеграм», «Движок») были
-     видны. Здесь — та же строка, но в файле, который можно трогать. Атрибут
-     hidden в разметке ниже остаётся смысловой пометкой: срез 4 снимет его, и
-     пункты сами появятся без правки этого блока. */
-  .nv[hidden] { display: none; }
+  /* Та же история, что была у .nv, и то же место для правки. .verdict сама
+     объявляет display: flex, а авторское правило старше браузерного [hidden] —
+     поэтому плашка, спрятанная атрибутом, всё равно видна: в разделе «Движок»
+     она висела пустой полосой у исправного бота. У соседних .pane и .step такое
+     правило в style.css есть, у .verdict его забыли.
+
+     Правильная правка — одна строка там же, рядом с .pane[hidden]. Но тот файл
+     закрыт для правок, поэтому строка живёт здесь. */
+  .verdict[hidden] { display: none; }
 </style>
 </head>
 <body class="fixed">
@@ -27,11 +28,9 @@
   Разделы сайдбара подменяют ленту, а не открываются модальными окнами — как в
   приложении Claude, где раздел занимает всё поле. «Новый расход» возвращает ленту.
 
-  Здесь пустой скелет: всё содержимое ленты и записей сайдбара наполняет
-  /static/app.js, опрашивая /api/events раз в три секунды. Выдуманные данные
-  остались только в скрытых панелях («Кто может писать», «Телеграм», «Движок») —
-  они оживут в срезе 4, а до тех пор людей, бота и версии движка в них показывать
-  некому.
+  Здесь пустой скелет: всё содержимое ленты и всех разделов сайдбара наполняет
+  /static/app.js, опрашивая /api/events раз в три секунды. Выдуманных данных в
+  файле не осталось: каждая строка на экране приехала из снимка состояния.
 -->
 
 <svg style="display:none" aria-hidden="true">
@@ -71,15 +70,15 @@
       <svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r"></span>
     </a>
 
-    <button class="nv" type="button" id="nav-people" data-pane="people" hidden>
+    <button class="nv" type="button" id="nav-people" data-pane="people">
       <svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r"></span>
     </button>
 
-    <button class="nv" type="button" id="nav-telegram" data-pane="telegram" hidden>
+    <button class="nv" type="button" id="nav-telegram" data-pane="telegram">
       <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot off"></span>
     </button>
 
-    <button class="nv" type="button" id="nav-engine" data-pane="engine" hidden>
+    <button class="nv" type="button" id="nav-engine" data-pane="engine">
       <svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r"></span>
     </button>
 
@@ -163,12 +162,15 @@
            телеграму: бот отвечает только тем, кто здесь есть.</p>
 
         <div class="card">
-          <div class="row"><span class="k">Леонид Годник</span><span class="v nick">@leogodnik</span><button class="bt" type="button">Убрать</button></div>
-          <div class="row"><span class="k">Ольга Кузнецова</span><span class="v noname">ника нет</span><button class="bt" type="button">Убрать</button></div>
-          <div class="sec-h">Стучались, но не впущены</div>
-          <div class="row"><span class="k">Иван Соколов</span><span class="nick">@sokolov_i</span><span class="v stamp">вчера, 14:20</span><button class="bt go" type="button">Впустить</button></div>
-          <div class="row"><span class="k">Мария П.</span><span class="noname">ника нет</span><span class="v stamp">сегодня, 09:41</span><button class="bt go" type="button">Впустить</button></div>
+          <div id="allowed"></div>
+          <div class="sec-h" id="knocked-head" hidden>Стучались, но не впущены</div>
+          <div id="knocked"></div>
         </div>
+
+        <p class="note" id="people-none" hidden>
+          Пока никого. Список нужен телеграму: пока он не подключён, писать
+          боту некому.
+        </p>
 
         <p class="note">Ник в телеграме заводить необязательно: есть — показываем его, нет —
            имя из профиля и пометку. Числовой идентификатор не показываем никогда, хотя
@@ -184,41 +186,49 @@
         <p class="lede">Нужен, чтобы слать чеки с телефона и пускать коллег. Без него
            рабочее место работает полностью — телеграм необязателен.</p>
 
-        <div class="card">
-          <div class="row">
-            <span class="k">Подключён</span>
-            <span class="v nick">@leo_cheki_bot</span>
-            <span class="stamp">опрос идёт</span>
-          </div>
-          <div class="row">
-            <span class="k">Владелец</span>
-            <span class="v nick">@leogodnik</span>
-          </div>
-        </div>
+        <div class="card" id="tg-facts"></div>
 
         <div class="grp bts">
-          <button class="bt" type="button" aria-expanded="true">Заменить бота</button>
-          <button class="bt" type="button">Отключить телеграм</button>
+          <button class="bt" type="button" id="tg-open">Подключить бота</button>
+          <button class="bt" type="button" id="tg-off" hidden>Отключить телеграм</button>
         </div>
 
-        <h2>Заменить бота</h2>
-        <div class="card plain">
-          <div class="field">
-            <label for="newtok">Токен нового бота от @BotFather</label>
-            <input class="fin" id="newtok" type="text" autocomplete="off" spellcheck="false" placeholder="8123456789:AAHf-kL2m7nQ...">
+        <div id="tg-form" hidden>
+          <h2 id="tg-form-head">Токен бота</h2>
+          <div class="card plain">
+            <div class="field">
+              <label for="newtok">Строка от @BotFather</label>
+              <input class="fin" id="newtok" type="text" autocomplete="off"
+                     spellcheck="false" placeholder="8123456789:AAHf-kL2m7nQ...">
+            </div>
+
+            <!-- Три следствия показываются до подтверждения, а не после.
+                 При первом подключении их нет: терять там нечего. -->
+            <div id="tg-conseq" hidden>
+              <p class="note">Что при этом произойдёт:</p>
+              <ul class="conseq">
+                <li>Список пишущих <b>сохранится</b> — телеграм опознаёт человека
+                    одним номером у всех ботов.</li>
+                <li>Неразобранные сообщения <b>потеряются</b>: у нового бота своя
+                    очередь.</li>
+                <li>Опрос <b>перезапустится сам</b>, сбросив offset — он у каждого
+                    бота свой. Останавливать ничего не надо.</li>
+              </ul>
+            </div>
+
+            <div class="bts spaced">
+              <button class="bt go" type="button" id="tg-save">Подключить</button>
+              <button class="bt" type="button" id="tg-cancel">Отмена</button>
+            </div>
           </div>
-          <p class="note">Что при этом произойдёт:</p>
-          <ul class="conseq">
-            <li>Список пишущих <b>сохранится</b> — телеграм опознаёт человека одним номером
-                у всех ботов.</li>
-            <li>Неразобранные сообщения <b>потеряются</b>: у нового бота своя очередь.</li>
-            <li>Опрос <b>перезапустится сам</b>, сбросив offset — он у каждого бота свой.
-                Останавливать ничего не надо.</li>
-          </ul>
-          <div class="bts spaced">
-            <button class="bt go" type="button">Заменить</button>
-            <button class="bt" type="button">Отмена</button>
+
+          <div class="verdict" id="tg-said" hidden>
+            <svg class="mark"><use href="#mark"/></svg><span></span>
           </div>
+
+          <p class="note">Строка никуда, кроме вашего компьютера, не уходит:
+             рабочее место живёт на 127.0.0.1 и пишет токен в файл
+             <code class="inline">.env</code> рядом с ботом.</p>
         </div>
       </div></div>
     </section>
@@ -231,20 +241,18 @@
         <p class="lede">Кто разбирает фотографию чека. Перезапуск не нужен: следующий чек
            разберётся уже новым движком.</p>
 
-        <div class="card">
-          <label class="pick">
-            <input type="radio" name="engine" value="claude" checked>
-            <span class="nm">Claude Code</span><span class="tag">найден, 2.1.232</span>
-          </label>
-          <label class="pick">
-            <input type="radio" name="engine" value="codex" disabled>
-            <span class="nm">Codex</span><span class="tag">не установлен · пока не поддержан</span>
-          </label>
+        <div class="card" id="engine-picks"></div>
+
+        <div class="verdict" id="engine-gone" hidden>
+          <svg class="mark"><use href="#mark"/></svg>
+          <span></span>
         </div>
 
-        <p class="note">Codex прочитает чек не хуже, но адаптер к нему ни разу не запускали
-           вживую, а непроверенный режим, сломавшись, оставит впечатление, что кривой весь
-           проект. Появится отдельным файлом, когда будет чем проверить.</p>
+        <p class="note">Промпт, схема и все проверки у движков общие: страховка
+           от ошибок модели не может зависеть от того, чья модель ошиблась.
+           Различаются команда, способ передать картинку и модель. Начатый
+           разбор доводится прежним движком — отменить запущенную программу
+           нельзя, а бросить её значит потерять уже присланный чек.</p>
       </div></div>
     </section>
 

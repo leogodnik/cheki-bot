@@ -39,6 +39,10 @@ PROMPT_PATH = BASE_DIR / "prompt.md"
 SCHEMA_PATH = BASE_DIR / "schema.json"
 
 MODELS = {"фото": "gpt-5.6-terra", "текст": "gpt-5.6-luna"}
+
+# Имя команды в терминале. Отсюда его берёт agent.versions(), чтобы спросить
+# версию, — а не из строки, вписанной в третьем месте.
+COMMAND = "codex"
 EFFORT = "low"
 TIMEOUT = 180
 

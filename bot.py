@@ -5,7 +5,6 @@
 Разбор — общий для обоих каналов, он живёт в intake.py.
 """
 
-import json
 import queue
 import threading
 import time
@@ -17,22 +16,7 @@ import feed
 import intake
 import state as memory
 import web
-
-API = "https://api.telegram.org/bot{token}/{method}"
-POLL_SECONDS = 30
-
-
-def call(token, method, **params):
-    """Один вызов Bot API. Ждём чуть дольше, чем длится долгий опрос."""
-    response = requests.post(
-        API.format(token=token, method=method), json=params,
-        timeout=POLL_SECONDS + 35,
-    )
-    response.raise_for_status()
-    answer = response.json()
-    if not answer.get("ok"):
-        raise RuntimeError(answer.get("description", "телеграм ответил не ok"))
-    return answer["result"]
+from telegram import POLL_SECONDS, call
 
 
 def get_updates(token, offset):
@@ -85,21 +69,32 @@ def download_photo(token, photo, sender):
     return intake.save_photo(response.content, sender)
 
 
-def knock(env, st, message):
-    """Чужому отвечаем один раз и молчим дальше.
+def knock(env, message):
+    """Чужому отвечаем один раз и запоминаем его в «стучались».
 
-    В терминал печатается готовая строка для settings.json: в срезе 3 то же
-    самое будет делать панель кнопкой «Впустить»."""
+    Настройки перечитываются здесь заново, хотя вызывающий их уже читал:
+    между тем чтением и этой строкой хозяин мог нажать «Впустить», и тогда
+    человеку незачем слышать отказ.
+
+    Числовой id хранится, но на экран не попадает никогда: показываем ник, а
+    если ника нет — имя из профиля и пометку. Ник в телеграме заводить
+    необязательно, и человек без ника не должен выглядеть сломанной строкой."""
     sender = message.get("from", {})
     sender_id = sender.get("id")
-    if sender_id in st["refused"]:
+    settings = config.load_settings()
+    if sender_id in config.allowed_ids(settings):
         return
-    st["refused"].append(sender_id)
-    line = {"id": sender_id, "username": sender.get("username", ""),
-            "name": sender.get("first_name", "")}
-    print(f"постучался чужой: {who(message)}")
-    print("  впустить — добавьте эту строку в settings.json, в список allowed:")
-    print("  " + json.dumps(line, ensure_ascii=False))
+    knocked = settings.get("knocked", [])
+    if any(str(person.get("id")) == str(sender_id) for person in knocked):
+        return
+    knocked.append({"id": sender_id,
+                    "username": sender.get("username", ""),
+                    "name": sender.get("first_name", ""),
+                    "at": time.time()})
+    settings["knocked"] = knocked
+    config.save_settings(settings)
+    print(f"постучался чужой: {who(message)} — впустите его в сайдбаре, "
+          "раздел «Кто может писать»")
     say(env["bot_token"], message["chat"]["id"],
         "Этот бот записывает расходы своего хозяина. "
         "Если он вас ждёт — передайте ему, что вы написали.")
@@ -114,7 +109,7 @@ def admit(env, st, jobs, message):
     chat_id = message["chat"]["id"]
     author = who(message)
     if message.get("from", {}).get("id") not in config.allowed_ids(settings):
-        knock(env, st, message)
+        knock(env, message)
         return
 
     incoming = extract(message)
@@ -133,7 +128,11 @@ def admit(env, st, jobs, message):
         return
 
     job = {"kind": incoming["kind"], "payload": "", "channel": "телеграм",
-           "author": author, "chat_id": chat_id, "file": "", "mark": "", "task": ""}
+           "author": author, "chat_id": chat_id,
+           # Идентификатор нужен разбору: он проверит белый список ещё раз,
+           # уже перед вызовом движка.
+           "user_id": message.get("from", {}).get("id"),
+           "file": "", "mark": "", "task": ""}
 
     if incoming["kind"] == "фото":
         mark = incoming["photo"]["file_unique_id"]
@@ -228,16 +227,42 @@ def worker(env, st, jobs):
 
 
 def telegram_loop(env, st, jobs):
-    """Опрос телеграма. Своим потоком, потому что главный занят страницей."""
-    print("Телеграм: жду сообщений.")
+    """Надзор за опросом. Живёт всё время работы бота, даже когда токена нет.
+
+    Поток стартует всегда, в том числе с пустым .env: токен может появиться
+    через минуту — из мастера или из сайдбара, — и человек не должен ради
+    этого перезапускать бота.
+
+    Две секунды сна вместо тридцати не расточительство: пустая проверка стоит
+    одно сравнение строк, а полминуты ожидания после нажатия «Подключить»
+    человек прочтёт как поломку."""
+    while True:
+        token = env["bot_token"]
+        if not token:
+            time.sleep(2)
+            continue
+        print("Телеграм: жду сообщений.")
+        poll_with(env, st, jobs, token)
+        print("Телеграм: опрос остановлен — бота заменили или отключили.")
+
+
+def poll_with(env, st, jobs, token):
+    """Опрос телеграма одним конкретным токеном. Своим потоком, потому что
+    главный занят страницей."""
     while True:
         try:
-            updates = get_updates(env["bot_token"], st["offset"])
+            updates = get_updates(token, st["offset"])
         except (requests.RequestException, RuntimeError, ValueError) as error:
             # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
             print(f"телеграм не отвечает ({error}), жду пять секунд")
             time.sleep(5)
             continue
+        # Пока висел долгий опрос, бота могли заменить. Эти обновления от
+        # прежнего бота, и двигать по ним offset нового нельзя: у каждого бота
+        # своя нумерация, и чужой номер новый бот либо не поймёт, либо поймёт
+        # неправильно и промолчит.
+        if env["bot_token"] != token:
+            return
         for update in updates:
             st["offset"] = update["update_id"] + 1
             message = update.get("message")
@@ -266,12 +291,14 @@ def main():
         print()
     else:
         threading.Thread(target=worker, args=(env, st, jobs), daemon=True).start()
-        if env["bot_token"]:
-            threading.Thread(target=telegram_loop, args=(env, st, jobs),
-                             daemon=True).start()
-        else:
+        # Поток заводится всегда, даже без токена: решает уже надзор внутри.
+        # Токен может появиться через минуту — из сайдбара или из мастера, — и
+        # перезапускать ради этого бота человек не должен.
+        threading.Thread(target=telegram_loop, args=(env, st, jobs),
+                         daemon=True).start()
+        if not env["bot_token"]:
             # Это не поломка, а обычный способ работать: чеки принимает
-            # браузер. Телеграм подключается в срезе 5, кнопкой.
+            # браузер. Телеграм подключается кнопкой в сайдбаре.
             print("Телеграм не подключён — работаем через браузер.")
 
     web.quiet()
