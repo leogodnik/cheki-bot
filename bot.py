@@ -119,9 +119,11 @@ def admit(env, st, jobs, message):
 
     incoming = extract(message)
     if incoming is None:
-        say(env["bot_token"], chat_id,
-            "Пришлите фотографию чека или напишите тратой: что, сколько и чем "
-            "платили. Например: обед 850 картой")
+        tell(env, chat_id, {"kind": "слово",
+                            "text": "Пришлите фотографию чека или напишите "
+                            "тратой: что, сколько и чем платили.",
+                            "note": "Например: обед 850 картой",
+                            "author": author, "channel": "телеграм"})
         return
 
     if incoming["kind"] == "голос":
@@ -137,7 +139,7 @@ def admit(env, st, jobs, message):
         mark = incoming["photo"]["file_unique_id"]
         old = intake.duplicate(st, mark)
         if old:
-            tell(env, chat_id, {"kind": "слово", "text": "Этот чек уже записан.",
+            tell(env, chat_id, {"kind": "слово", "text": "Этот чек уже записан",
                                 "row": old.get("row"), "note": intake.when(old),
                                 "author": author, "channel": "телеграм"})
             return
@@ -145,8 +147,9 @@ def admit(env, st, jobs, message):
             path = download_photo(env["bot_token"], incoming["photo"], author)
         except (requests.RequestException, RuntimeError) as error:
             print(f"не скачал фотографию: {error}")
-            say(env["bot_token"], chat_id,
-                "Не смог скачать фотографию, пришлите ещё раз.")
+            tell(env, chat_id, {"kind": "слово", "text": "Не смог скачать фотографию.",
+                                "note": "Пришлите ещё раз.",
+                                "author": author, "channel": "телеграм"})
             return
         # Ответа ждать 15–50 секунд, человеку надо сказать, что мы живы.
         say(env["bot_token"], chat_id, "Смотрю чек…")

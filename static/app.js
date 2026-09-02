@@ -267,13 +267,30 @@
     todayNone.hidden = !today.hidden;
   }
 
-  function receive(answer) {
+  function receive(answer, asked) {
     /* Бот поднял страницу, но разбирать не будет. Показываем объяснение и
        ничего больше не рисуем: лента здесь ни при чём. */
     if (answer.state && answer.state.blocked) {
       show("blocked");
       return;
     }
+
+    /* Бота могли перезапустить, пока страница была открыта, — тогда нумерация
+       событий пошла с единицы, и все наши пометки (shown, last, нарисованное)
+       врут. Отличаем перезапуск от обычной гонки тем же способом, что и сам
+       сервер в feed.since(): сравниваем не текущий last (его мог уже поднять
+       второй, более свежий ответ), а именно то, что мы спрашивали ЭТИМ
+       запросом (asked). При обычной гонке спрошенное никогда не обгоняет
+       ответ — сервер физически не может рассказать меньше, чем уже знал в
+       момент, когда мы это спрашивали. А если обогнало — лента родилась
+       заново, и надо начать с чистого листа. */
+    if (asked > answer.last) {
+      shown = {};
+      records = [];
+      col.textContent = "";
+      last = 0;
+    }
+
     (answer.events || []).forEach(place);
     /* Назад номер не двигаем: ответ отправки и ответ опроса приходят в любом
        порядке, и меньший из них заставил бы спросить уже показанное. */
@@ -288,9 +305,10 @@
      дешевле и понятнее на уроке. Сорвался запрос — молчим и пробуем снова:
      бот мог перезапускаться, и красная строка на весь экран здесь ни к чему. */
   function poll() {
-    fetch("/api/events?after=" + last)
+    var asked = last;
+    fetch("/api/events?after=" + asked)
       .then(function (response) { return response.json(); })
-      .then(receive)
+      .then(function (answer) { receive(answer, asked); })
       .catch(function () {});
   }
 
@@ -298,9 +316,10 @@
      опросом. Вернувшиеся события показываем немедленно, чтобы поле не
      выглядело мёртвым три секунды. */
   function send(form) {
+    var asked = last;
     fetch("/api/say", {method: "POST", body: form})
       .then(function (response) { return response.json(); })
-      .then(receive)
+      .then(function (answer) { receive(answer, asked); })
       .catch(function () {
         place({id: 0, kind: "слово", text: "Бот не отвечает.",
                note: "Проверьте окно терминала, в котором он запущен."});

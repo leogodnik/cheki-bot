@@ -102,7 +102,8 @@ if __name__ == "__main__":
     if api_key_in_env():
         print(BLOCKED_TEXT)
     settings = load_settings()
-    print("токен бота:", env["bot_token"][:8] + "…")
+    print("токен бота:", env["bot_token"][:8] + "…" if env["bot_token"]
+          else "не задан, работаем через браузер")
     print("адрес таблицы:", env["sheet_url"])
     print("движок:", settings["engine"])
     print("впущено человек:", len(allowed_ids(settings)))
