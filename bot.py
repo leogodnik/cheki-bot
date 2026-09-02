@@ -206,11 +206,18 @@ def worker(env, st, jobs):
             events = [intake.sign({"kind": "слово",
                                    "text": "Что-то пошло не так — попробуйте ещё раз."},
                                   job)]
-        for event in events:
-            feed.add(event)
-            if job["channel"] == "телеграм" and job.get("chat_id"):
-                say(env["bot_token"], job["chat_id"], as_text(event))
-        memory.save(st)
+        try:
+            for event in events:
+                feed.add(event)
+                if job["channel"] == "телеграм" and job.get("chat_id"):
+                    say(env["bot_token"], job["chat_id"], as_text(event))
+        except Exception as error:
+            # И рассылка не должна останавливать поток — иначе очередь молча
+            # копится, а телеграм так и не получит готовый ответ.
+            print(f"рассылка события сорвалась: {error}")
+        finally:
+            # Сохраняем в любом случае — и когда рассылка прошла, и когда нет.
+            memory.save(st)
 
 
 def telegram_loop(env, st, jobs):
@@ -234,7 +241,11 @@ def telegram_loop(env, st, jobs):
                     # Одно сломанное сообщение не должно останавливать бота:
                     # offset уже сдвинут, следующее разберётся.
                     print(f"сообщение не обработалось: {error}")
-            memory.save(st)
+            try:
+                memory.save(st)
+            except Exception as error:
+                # Не сохранили — опрос всё равно должен продолжаться.
+                print(f"не сохранил состояние: {error}")
 
 
 def main():
