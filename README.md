@@ -40,6 +40,7 @@ cp settings.example.json settings.json
 | `schema.json` | поля ответа, ими же ответ и проверяется |
 | `agent.py` | шов: зовёт движок и проверяет форму ответа |
 | `engines/claude_code.py` | вызов Claude Code |
+| `engines/codex.py` | вызов Codex CLI по подписке ChatGPT |
 | `checks.py` | проверки без модели — главное место проекта |
 | `bot.py` | телеграм: приём, скачивание, запись, ответ |
 | `sheet.py` / `sheet.gs` | мост к Google-таблице |
@@ -51,6 +52,7 @@ cp settings.example.json settings.json
 ```bash
 .venv/bin/python tools/selfcheck.py                    # чистые функции
 .venv/bin/python agent.py тестовые-чеки/01-чёткий.jpg  # агент живьём
+.venv/bin/python agent.py тестовые-чеки/01-чёткий.jpg codex  # тот же чек вторым движком
 .venv/bin/python sheet.py                              # связь с таблицей
 ```
 

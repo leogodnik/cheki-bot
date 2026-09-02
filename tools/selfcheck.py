@@ -126,6 +126,15 @@ check("дата в будущем ловится при высокой увер�
 verdict = checks.review(dict(clean, date="2025-01-01"), categories, today)
 check("дата старше года ловится", verdict["status"] == "проверить")
 
+# Граница: сегодня 23 августа 2026-го, ровно год назад — 23 августа 2025-го.
+# Это не выдуманный край: так выглядит сегодняшний чек, у которого агент
+# промахнулся годом. Codex так и промахнулся на мятом чеке.
+verdict = checks.review(dict(clean, date="2025-08-23"), categories, today)
+check("ровно год назад — тоже ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, date="2025-08-24"), categories, today)
+check("день после годовой границы проходит", verdict["status"] == "готово")
+
 verdict = checks.review(dict(clean, date=""), categories, today)
 check("пустая дата ловится", verdict["status"] == "проверить")
 
@@ -158,6 +167,15 @@ check("строка ИТОГ — источник в порядке, стату�
 
 verdict = checks.review(dict(clean, amount_source="строка К ОПЛАТЕ"), categories, today)
 check("строка К ОПЛАТЕ — источник тоже в порядке, статус остаётся «готово»",
+      verdict["status"] == "готово")
+
+# Пятое значение завели потому, что четыре первых — все про чек, и на
+# «такси 450 наличными» модель брала любое подходящее: Codex отвечал
+# «не нашёл», Claude — «сложены позиции». Оба подозрительны, и каждая
+# трата текстом уезжала со статусом «проверить».
+verdict = checks.review(dict(clean, amount_source="сказано в сообщении"),
+                        categories, today)
+check("сумма из сообщения текстом — не повод подозревать",
       verdict["status"] == "готово")
 
 verdict = checks.review(dict(clean, amount=None, amount_source="не нашёл"),

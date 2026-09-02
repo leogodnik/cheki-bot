@@ -1,13 +1,18 @@
 """Шов между ботом и движком.
 
 bot.py зовёт parse() и получает словарь по schema.json. Какой движок стоит за
-швом, бот не знает: в срезе 4 рядом ляжет engines/codex.py, и bot.py не
-изменится ни строкой.
+швом, бот не знает: рядом с engines/claude_code.py лёг engines/codex.py, и
+bot.py не изменился ни строкой.
+
+Движку передаётся и payload — путь к фотографии. Claude Code открывает файл
+сам по строке внутри задания, Codex берёт картинку флагом `-i`; шов зовёт оба
+одинаково, а как доставить картинку, решает движок.
 
 Проверка формы ответа живёт здесь, а не в движке. Флаг схемы может отвалиться
 молча у любого вендора — у Claude Code это находка 3 базовой спеки, у Codex
-тот же класс поломки описан багом openai/codex#15451. Страховать от этого
-должен шов, а не отдельный движок.
+контрольный прогон без схемы вернул `payment_method` вместо `payment` и
+потерял `amount_source` и `currency`. Одна и та же поломка у двух вендоров;
+страховать от неё должен шов, а не отдельный движок.
 """
 
 import json
@@ -15,7 +20,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from engines import EngineError, claude_code
+from engines import EngineError, claude_code, codex
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -24,7 +29,7 @@ FIELDS = ("intent", "date", "amount", "amount_source", "currency", "merchant",
 
 INTENTS = ("расход", "правка", "не расход")
 
-ENGINES = {"claude_code": claude_code}
+ENGINES = {"claude_code": claude_code, "codex": codex}
 
 
 class AgentError(Exception):
@@ -42,7 +47,7 @@ def parse(kind, payload, categories, today, engine="claude_code"):
     task = build_task(kind, payload, categories, today)
     for attempt in (1, 2):
         try:
-            return validate(ENGINES[engine].run(kind, task))
+            return validate(ENGINES[engine].run(kind, task, payload))
         except (EngineError, AgentError) as error:
             print(f"попытка {attempt} не удалась: {error}")
             if attempt == 2:
@@ -101,16 +106,22 @@ if __name__ == "__main__":
         sys.exit(
             'Как звать:\n'
             '  .venv/bin/python agent.py тестовые-чеки/01-чёткий.jpg\n'
-            '  .venv/bin/python agent.py "такси 450 наличными"'
+            '  .venv/bin/python agent.py "такси 450 наличными"\n'
+            '  .venv/bin/python agent.py тестовые-чеки/01-чёткий.jpg codex\n'
+            'Вторым словом — движок: ' + " · ".join(ENGINES) +
+            '. По умолчанию claude_code.'
         )
     argument = sys.argv[1]
+    # Движок вторым аргументом — чтобы прогнать один и тот же чек двумя
+    # движками подряд и положить ответы рядом.
+    engine = sys.argv[2] if len(sys.argv) > 2 else "claude_code"
     path = Path(argument)
     if path.suffix.lower() in (".jpg", ".jpeg", ".png"):
         kind, payload = "фото", str(path.resolve())
     else:
         kind, payload = "текст", argument
     categories = seed_categories()
-    print(f"вход: {kind}, статей в справочнике: {len(categories)} "
-          f"(из categories-seed.md)")
-    print(json.dumps(parse(kind, payload, categories, date.today()),
+    print(f"вход: {kind}, движок: {engine}, статей в справочнике: "
+          f"{len(categories)} (из categories-seed.md)")
+    print(json.dumps(parse(kind, payload, categories, date.today(), engine),
                      ensure_ascii=False, indent=2))
