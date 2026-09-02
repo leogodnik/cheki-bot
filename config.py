@@ -61,18 +61,18 @@ def load_settings():
 
     Испорченный файл — не повод падать: возвращаем пустой белый список, бот
     молчит для всех, и причина видна в терминале."""
+    settings = json.loads(json.dumps(DEFAULTS))
     try:
         data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
+        settings.update(data)
     except FileNotFoundError:
         print("settings.json не найден — бот никого не впустит. "
               "cp settings.example.json settings.json")
-        return dict(DEFAULTS)
-    except json.JSONDecodeError as error:
+        return json.loads(json.dumps(DEFAULTS))
+    except (json.JSONDecodeError, TypeError, ValueError) as error:
         print(f"settings.json испорчен ({error}) — бот никого не впустит, "
               "пока файл не починят.")
-        return dict(DEFAULTS)
-    settings = dict(DEFAULTS)
-    settings.update(data)
+        return json.loads(json.dumps(DEFAULTS))
     return settings
 
 

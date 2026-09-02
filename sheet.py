@@ -50,6 +50,7 @@ def categories(state, url, secret):
         if state["categories"]:
             print(f"справочник не прочитался ({error}) — работаю по последнему списку")
             return state["categories"], "запас"
+        print(f"справочник не прочитался ({error}) — запаса тоже нет")
         return [], "нет"
     state["categories"] = found
     state["categories_at"] = now

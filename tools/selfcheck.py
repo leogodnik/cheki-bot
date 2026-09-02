@@ -119,4 +119,4 @@ print()
 if failed:
     print(f"провалено {len(failed)}: " + ", ".join(failed))
     sys.exit(1)
-print(f"{passed} проверок, все прошли")
+print(f"проверок пройдено: {passed}")

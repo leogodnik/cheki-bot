@@ -16,16 +16,14 @@ import json
 import subprocess
 from pathlib import Path
 
+from engines import EngineError
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
 SCHEMA_PATH = BASE_DIR / "schema.json"
 
 MODELS = {"фото": "sonnet", "текст": "haiku"}
 TIMEOUT = 180
-
-
-class EngineError(Exception):
-    """Движок не ответил, ответил ошибкой или ответил не тем."""
 
 
 def run(kind, task):
@@ -49,6 +47,13 @@ def run(kind, task):
         )
     except subprocess.TimeoutExpired:
         raise EngineError(f"движок молчал {TIMEOUT} секунд")
+    except OSError as error:
+        # Чаще всего это FileNotFoundError: claude не установлен или не
+        # виден в PATH. Без этого человек получит «Смотрю чек…» и тишину.
+        raise EngineError(
+            "не нашёл claude — проверьте, что Claude Code установлен и "
+            f"виден в PATH (запустите claude --version). Подробности: {error}"
+        )
 
     if done.returncode != 0:
         raise EngineError(

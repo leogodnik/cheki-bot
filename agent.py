@@ -15,8 +15,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
-from engines import claude_code
-from engines.claude_code import EngineError
+from engines import EngineError, claude_code
 
 BASE_DIR = Path(__file__).resolve().parent
 

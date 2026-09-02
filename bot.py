@@ -13,7 +13,6 @@ import config
 import state as memory
 
 from datetime import date, datetime
-from pathlib import Path
 
 import agent
 import checks
@@ -49,7 +48,7 @@ def say(token, chat_id, text):
     """Ответ в чат. Не дошёл — это не повод ронять бота."""
     try:
         call(token, "sendMessage", chat_id=chat_id, text=text)
-    except (requests.RequestException, RuntimeError) as error:
+    except (requests.RequestException, RuntimeError, ValueError) as error:
         print(f"не смог ответить в чат {chat_id}: {error}")
 
 
@@ -197,7 +196,8 @@ def handle(env, st, message, channel, author):
         answer = agent.parse(incoming["kind"], payload, categories, today,
                              settings["engine"])
     except agent.AgentError as error:
-        # Файл остаётся во входящих: разберём, когда починится.
+        # Файл остаётся во входящих: сам он не пересмотрится, второй раз
+        # чек присылает человек.
         print(f"агент не справился: {error}")
         say(env["bot_token"], chat_id,
             "Не смог разобрать. Попробуйте ещё раз или напишите текстом.")
@@ -248,25 +248,28 @@ def main():
     config.refuse_if_api_key()
     st = memory.load()
     print("Бот запущен, жду сообщений. Ctrl+C — выход.")
-    while True:
-        try:
-            updates = get_updates(env["bot_token"], st["offset"])
-        except (requests.RequestException, RuntimeError) as error:
-            # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
-            print(f"телеграм не отвечает ({error}), жду пять секунд")
-            time.sleep(5)
-            continue
-        for update in updates:
-            st["offset"] = update["update_id"] + 1
-            message = update.get("message")
-            if message:
-                try:
-                    handle(env, st, message, "телеграм", who(message))
-                except Exception as error:
-                    # Одно сломанное сообщение не должно останавливать бота:
-                    # offset уже сдвинут, следующее разберётся.
-                    print(f"сообщение не обработалось: {error}")
-            memory.save(st)
+    try:
+        while True:
+            try:
+                updates = get_updates(env["bot_token"], st["offset"])
+            except (requests.RequestException, RuntimeError, ValueError) as error:
+                # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
+                print(f"телеграм не отвечает ({error}), жду пять секунд")
+                time.sleep(5)
+                continue
+            for update in updates:
+                st["offset"] = update["update_id"] + 1
+                message = update.get("message")
+                if message:
+                    try:
+                        handle(env, st, message, "телеграм", who(message))
+                    except Exception as error:
+                        # Одно сломанное сообщение не должно останавливать бота:
+                        # offset уже сдвинут, следующее разберётся.
+                        print(f"сообщение не обработалось: {error}")
+                memory.save(st)
+    except KeyboardInterrupt:
+        print("\nОстанавливаюсь.")
 
 
 if __name__ == "__main__":

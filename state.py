@@ -5,8 +5,9 @@
 очередь строк, не доехавших до таблицы. Плюс тех, кому уже отказали, — чтобы
 не отвечать чужому дважды.
 
-Этот файл можно удалять: ничего невосполнимого в нём нет. Белого списка здесь
-намеренно нет, он живёт в settings.json.
+Удалять можно, только когда очередь пуста: если бот отвечал «Разобрал, но
+в таблицу не попало — попробую позже», в файле лежат строки расходов, которых
+больше нигде нет. Белого списка здесь намеренно нет, он живёт в settings.json.
 """
 
 import json
@@ -31,12 +32,12 @@ SEEN_LIMIT = 500
 
 def load():
     """Память бота. Файла нет или он испорчен — начинаем с чистой заготовки."""
+    state = json.loads(json.dumps(EMPTY))
     try:
         data = json.loads(STATE_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+        state.update(data)
+    except (FileNotFoundError, json.JSONDecodeError, TypeError, ValueError):
         return json.loads(json.dumps(EMPTY))
-    state = json.loads(json.dumps(EMPTY))
-    state.update(data)
     return state
 
 

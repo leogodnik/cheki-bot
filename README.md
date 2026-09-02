@@ -14,7 +14,13 @@ cd чеки-бот
 cp .env.example .env            # токен бота, адрес Apps Script, секрет
 chmod 600 .env
 cp settings.example.json settings.json
+```
 
+Прежде чем запускать бота, заведите таблицу и веб-приложение Apps Script по
+`sheet-setup.md` — без опубликованного веб-приложения бот не увидит
+справочник статей.
+
+```bash
 .venv/bin/python bot.py
 ```
 
@@ -38,7 +44,7 @@ cp settings.example.json settings.json
 | `bot.py` | телеграм: приём, скачивание, запись, ответ |
 | `sheet.py` / `sheet.gs` | мост к Google-таблице |
 | `config.py` | `.env` и `settings.json` |
-| `state.py` | служебная память; этот файл можно удалять |
+| `state.py` | служебная память; удалять только когда очередь пуста |
 
 ## Проверки
 
@@ -47,6 +53,10 @@ cp settings.example.json settings.json
 .venv/bin/python agent.py тестовые-чеки/01-чёткий.jpg  # агент живьём
 .venv/bin/python sheet.py                              # связь с таблицей
 ```
+
+`sheet.py` требует настроенную таблицу и адрес в `.env` (см. `sheet-setup.md`)
+— без них он падает сырым английским traceback (`MissingSchema`), а не
+понятной ошибкой.
 
 Живьём проверяется по разделу «Как проверяем» в
 `docs/superpowers/specs/2026-08-23-чеки-в-таблицу-design.md`.
