@@ -194,6 +194,20 @@ check("но статуса не меняет", verdict["status"] == "готов�
 check("и человеку про это говорится",
       any("Еда" in warning for warning in verdict["warnings"]))
 
+# «заплатил 12000» — сумма есть, назначения нет. До 2 сентября такая строка
+# уезжала в таблицу как «готово», а «проверить» получалась только тогда, когда
+# агент сам признавался в неуверенности. То есть статус висел на confidence —
+# на поле, которому эта таблица не верит нигде больше.
+verdict = checks.review(dict(clean, merchant=""), categories, today)
+check("пустой продавец ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, merchant="   "), categories, today)
+check("пробелы вместо продавца — то же самое", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, payment="неизвестно"), categories, today)
+check("а неизвестный способ оплаты статуса не меняет: «кофе 300» "
+      "не обязано говорить, чем платили", verdict["status"] == "готово")
+
 verdict = checks.review(dict(clean, doubts="время не видно"), categories, today)
 check("сомнения агента доходят до человека",
       verdict["warnings"] == ["время не видно"])
