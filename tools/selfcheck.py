@@ -94,6 +94,14 @@ check("после последнего — пусто, номер прежний
 fresh, last = feed.since(99)
 check("номер из прошлой жизни бота — отдаём журнал целиком", len(fresh) == 2)
 
+fresh, last = feed.since(2, life="чужая-жизнь")
+check("чужая метка life — тоже журнал целиком, даже если after не больше",
+      len(fresh) == 2 and last == 2)
+
+fresh, last = feed.since(2, life=feed.LIFE)
+check("своя метка life — работает как раньше, по одному after",
+      fresh == [] and last == 2)
+
 feed.forget()
 for number in range(feed.LIMIT + 50):
     feed.add({"kind": "слово", "text": str(number)})

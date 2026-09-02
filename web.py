@@ -44,7 +44,8 @@ def create(env, st, jobs, blocked=""):
         Страница зовёт этот маршрут раз в три секунды. Вебсокетов нет
         намеренно: на локальном адресе опрос дешевле и понятнее на уроке."""
         after = request.args.get("after", default=0, type=int)
-        fresh, last = feed.since(after)
+        life = request.args.get("life", default="", type=str)
+        fresh, last = feed.since(after, life)
         return jsonify(events=fresh, last=last, life=feed.LIFE,
                        state=snapshot(env, st, blocked))
 
