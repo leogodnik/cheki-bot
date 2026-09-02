@@ -13,6 +13,7 @@
   var shown = {};        /* какие события уже нарисованы */
   var records = [];      /* события «запись» — из них собирается сайдбар */
   var life = null;       /* метка текущего запуска бота, из последнего ответа */
+  var sheetLink = "";    /* адрес таблицы, из состояния — может не приехать вовсе */
 
   var today = document.getElementById("today");
   var todayNone = document.getElementById("today-none");
@@ -100,6 +101,42 @@
     if (event.author) box.appendChild(el("div", "src", event.author + " · " + event.channel));
   }
 
+  /* «строка 5» — ссылка на эту самую строку в таблице. Google Sheets открывает
+     нужную строку якорем #gid=…&range=A5; gid листа «Расходы» уже есть в адресе
+     из .env, оттуда его и берём. Запасной ноль — на случай адреса без gid:
+     тогда откроется первый лист, и это всё равно лучше, чем ничего.
+
+     Адреса таблицы может не быть, и приезжает он состоянием — то есть позже
+     первого события ленты. Тогда номер остаётся обычным текстом: притворяться
+     ссылкой он не должен, — а href проставит linkRows(), когда адрес придёт. */
+  function rowHref(row) {
+    if (!sheetLink) return "";
+    var gid = sheetLink.match(/[?#&]gid=(\d+)/);
+    return sheetLink.split(/[?#]/)[0] + "#gid=" + (gid ? gid[1] : "0") +
+      "&range=A" + row;
+  }
+
+  function rowRef(row, tail) {
+    var mark = el("em");
+    var link = el("a", "rw", "строка " + row);
+    link.dataset.row = row;
+    link.target = "_blank";
+    link.rel = "noopener";
+    var href = rowHref(row);
+    if (href) link.href = href;
+    mark.appendChild(link);
+    if (tail) mark.appendChild(document.createTextNode(tail));
+    return mark;
+  }
+
+  function linkRows() {
+    col.querySelectorAll("a.rw").forEach(function (link) {
+      var href = rowHref(link.dataset.row);
+      if (href) link.href = href;
+      else link.removeAttribute("href");
+    });
+  }
+
   /* Реплика человека — то, что он прислал. */
   function mine(event) {
     var box = el("div", "u");
@@ -145,7 +182,7 @@
     var title = el("b", "", event.text);
     if (event.row) {
       title.appendChild(document.createTextNode(" — "));
-      title.appendChild(el("em", "", "строка " + event.row));
+      title.appendChild(rowRef(event.row));
     }
     hdr.appendChild(title);
     box.appendChild(hdr);
@@ -184,8 +221,8 @@
       sub.appendChild(document.createTextNode(facts.join(" · ") + " — "));
     }
     if (event.row) {
-      sub.appendChild(el("em", "", "строка " + event.row +
-        (event.status === "проверить" ? ", на проверку" : "")));
+      sub.appendChild(rowRef(event.row,
+        event.status === "проверить" ? ", на проверку" : ""));
     } else {
       sub.appendChild(el("em", "", "в таблицу пока не попало"));
     }
@@ -229,12 +266,15 @@
 
     navTable.querySelector(".r").textContent =
       state.categories ? state.categories + " статей" : "";
-    if (state.sheet_link) {
-      navTable.href = state.sheet_link;
+    sheetLink = state.sheet_link || "";
+    if (sheetLink) {
+      navTable.href = sheetLink;
     } else {
       /* Адреса таблицы нет — пункт не должен притворяться ссылкой. */
       navTable.removeAttribute("href");
     }
+    /* Номера строк в уже нарисованной ленте ждут этого адреса. */
+    linkRows();
 
     document.querySelectorAll(".engine-badge").forEach(function (badge) {
       badge.textContent = state.engine;
