@@ -13,6 +13,11 @@
   var shown = {};        /* какие события уже нарисованы */
   var records = [];      /* события «запись» — из них собирается сайдбар */
 
+  var today = document.getElementById("today");
+  var todayNone = document.getElementById("today-none");
+  var greeting = document.getElementById("greeting");
+  var navTable = document.getElementById("nav-table");
+
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня",
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"];
   var PAYMENTS = {"карта": "картой", "наличные": "наличными",
@@ -206,12 +211,67 @@
     flow.scrollTop = flow.scrollHeight;
   }
 
+  /* Сайдбар. Здесь только то, что уже посчитано где-то ещё: имя из настроек,
+     статьи из кэша справочника, движок из settings.json. Управление ими —
+     срез 4, до тех пор их пункты в разметке скрыты. */
+  function paint(state) {
+    greeting.textContent = state.owner
+      ? "Что записываем, " + state.owner + "?"
+      : "Что записываем?";
+
+    navTable.querySelector(".r").textContent =
+      state.categories ? state.categories + " статей" : "";
+    if (state.sheet_link) {
+      navTable.href = state.sheet_link;
+    } else {
+      /* Адреса таблицы нет — пункт не должен притворяться ссылкой. */
+      navTable.removeAttribute("href");
+    }
+
+    document.querySelectorAll(".engine-badge").forEach(function (badge) {
+      badge.textContent = state.engine;
+    });
+  }
+
+  /* Список того, что записано сегодня. Собирается из тех же событий, что и
+     лента, — второго источника у него нет и быть не должно.
+
+     Кружок закрашен терракотой у строк со статусом «проверить»: терракота
+     значит «взгляни». */
+  function drawToday() {
+    var midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+
+    var mineToday = records.filter(function (record) {
+      return record.at * 1000 >= midnight.getTime();
+    });
+
+    today.textContent = "";
+    mineToday.forEach(function (record) {
+      var item = el("button", "li");
+      item.type = "button";
+      item.appendChild(el("span", "bl" + (record.status === "проверить" ? " chk" : "")));
+      item.appendChild(el("span", "nm",
+        record.merchant + (record.author ? " · " + record.author : "")));
+      item.appendChild(el("span", "am",
+        record.amount === null || record.amount === undefined ? "—" : money(record.amount)));
+      item.addEventListener("click", function () {
+        show("feed");
+        var node = col.querySelector('[data-id="' + record.id + '"]');
+        if (node) node.scrollIntoView({block: "center"});
+      });
+      today.appendChild(item);
+    });
+
+    today.hidden = mineToday.length === 0;
+    todayNone.hidden = !today.hidden;
+  }
+
   function receive(answer) {
     (answer.events || []).forEach(place);
-    /* Назад номер не двигаем: ответ отправки и ответ опроса приходят в любом
-       порядке, и меньший из них заставил бы спросить уже показанное. */
     last = Math.max(last, answer.last);
-    /* Пустое начало и лента — одно место в двух состояниях. */
+    if (answer.state) paint(answer.state);
+    drawToday();
     show(col.children.length ? "feed" : "empty");
   }
 

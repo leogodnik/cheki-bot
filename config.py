@@ -41,6 +41,7 @@ def load_env():
         "bot_token": os.environ["BOT_TOKEN"],
         "sheet_url": os.environ["SHEET_URL"],
         "sheet_secret": os.environ["SHEET_SECRET"],
+        "sheet_link": os.getenv("SHEET_LINK", ""),
     }
 
 

@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
 
+import agent
 import config
 import feed
 import intake
@@ -76,8 +77,20 @@ def create(env, st, jobs, blocked=""):
 
 
 def snapshot(env, st, blocked):
-    """Состояние для сайдбара. Наполнится в задаче 9."""
-    return {}
+    """Состояние для сайдбара. Едет с каждым ответом опроса — так сайдбар не
+    может разъехаться с лентой.
+
+    Число статей берётся из кэша в state.json, а не из таблицы: опрос идёт
+    раз в три секунды, и дёргать Apps Script на каждый заход незачем."""
+    settings = config.load_settings()
+    return {
+        "owner": (settings.get("owner") or "").strip(),
+        "categories": len(st["categories"]),
+        "sheet_link": env["sheet_link"],
+        "engine": agent.TITLES.get(settings["engine"], settings["engine"]),
+        "telegram": bool(env["bot_token"]),
+        "blocked": blocked,
+    }
 
 
 def published(events):

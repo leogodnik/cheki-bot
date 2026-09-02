@@ -31,6 +31,9 @@ INTENTS = ("расход", "правка", "не расход")
 
 ENGINES = {"claude_code": claude_code, "codex": codex}
 
+# Как движок называется в сайдбаре. Ключ — то, что лежит в settings.json.
+TITLES = {"claude_code": "Claude Code", "codex": "Codex"}
+
 
 class AgentError(Exception):
     """Разобрать не вышло. Человеку — честный отказ, в терминал — причина."""
