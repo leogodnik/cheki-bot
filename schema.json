@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["is_expense", "date", "amount", "currency", "merchant",
+               "category", "payment", "confidence", "doubts", "reply"],
+  "properties": {
+    "is_expense": {
+      "type": "boolean",
+      "description": "Это запись о расходе? На «привет», меню, визитку и прочее — false."
+    },
+    "date": {
+      "type": "string",
+      "description": "Дата операции в виде ГГГГ-ММ-ДД. Если не удалось определить — пустая строка."
+    },
+    "amount": {
+      "type": ["number", "null"],
+      "description": "Итоговая сумма в рублях и копейках. Если не прочиталась — null. Не угадывать."
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["RUB", "USD", "EUR", "другая"]
+    },
+    "merchant": {
+      "type": "string",
+      "description": "Кому заплатили или за что. Название с чека либо суть из текста."
+    },
+    "category": {
+      "type": "string",
+      "description": "Статья расхода — строго одна из списка в задании."
+    },
+    "payment": {
+      "type": "string",
+      "enum": ["карта", "наличные", "перевод", "неизвестно"]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["высокая", "средняя", "низкая"],
+      "description": "Низкая — если сумма или дата под вопросом."
+    },
+    "doubts": {
+      "type": "string",
+      "description": "Что именно не прочиталось. Пустая строка, если всё ясно."
+    },
+    "reply": {
+      "type": "string",
+      "description": "Одна короткая фраза человеку в чат."
+    }
+  }
+}

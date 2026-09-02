@@ -1,0 +1,15 @@
+# секреты и настройки хозяина
+.env
+settings.json
+state.json
+state.json.tmp
+
+# чеки живых людей
+чеки/
+
+# служебное
+.superpowers/
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
