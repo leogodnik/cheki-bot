@@ -13,12 +13,21 @@ import time
 
 import requests
 
-TIMEOUT = 20
+# Три замера подряд к боевому Apps Script: 22.5 с (ReadTimeout), 19.7 с
+# (успех), 20.2 с (ReadTimeout) — таблица отвечает около двадцати секунд,
+# и прежние TIMEOUT = 20 не доживали до ответа две попытки из трёх. Шестьдесят
+# — запас поверх измеренных двадцати, а не бесконечное ожидание.
+TIMEOUT = 60
 CACHE_SECONDS = 300
 
 
 class SheetError(Exception):
     """Таблица не ответила или ответила не «ok»."""
+
+
+class EmptyCategories(SheetError):
+    """Таблица ответила, но лист «Статьи» пуст или переименован — это не то
+    же самое, что таблица вовсе не ответила, и требует другого текста."""
 
 
 def fetch_categories(url, secret):
@@ -27,7 +36,7 @@ def fetch_categories(url, secret):
     found = [str(item).strip() for item in answer.get("categories", [])
              if str(item).strip()]
     if not found:
-        raise SheetError("лист «Статьи» пуст или переименован")
+        raise EmptyCategories("лист «Статьи» пуст или переименован")
     return found
 
 
@@ -40,18 +49,31 @@ def categories(state, url, secret):
 
     Пустой список означает, что разбирать нельзя. Придумывать статьи агенту
     запрещено: в отчёте заведутся «Продукты», «Продукты питания» и «Еда»
-    вместо одной строки."""
+    вместо одной строки.
+
+    «Откуда» различает не только «кэш» / «запас» / «таблица», но и, когда
+    список пуст, почему: «нет» — таблица ответила, а лист «Статьи» пуст или
+    переименован; «молчит» — таблица вовсе не ответила (таймаут, обрыв
+    соединения, не JSON). Первое — повод чинить таблицу, второе — повод
+    подождать и попробовать снова; звать их одним словом «нет» посылало
+    человека чинить то, что не сломано."""
     now = time.time()
     if state["categories"] and now - state["categories_at"] < CACHE_SECONDS:
         return state["categories"], "кэш"
     try:
         found = fetch_categories(url, secret)
+    except EmptyCategories as error:
+        if state["categories"]:
+            print(f"лист «Статьи» пуст ({error}) — работаю по последнему списку")
+            return state["categories"], "запас"
+        print(f"лист «Статьи» пуст ({error}) — запаса тоже нет")
+        return [], "нет"
     except (SheetError, requests.RequestException) as error:
         if state["categories"]:
             print(f"справочник не прочитался ({error}) — работаю по последнему списку")
             return state["categories"], "запас"
-        print(f"справочник не прочитался ({error}) — запаса тоже нет")
-        return [], "нет"
+        print(f"таблица не ответила ({error}) — запаса тоже нет")
+        return [], "молчит"
     state["categories"] = found
     state["categories_at"] = now
     return found, "таблица"
