@@ -16,6 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import checks
+import config
 import feed
 import intake
 import sheet
@@ -74,6 +75,34 @@ with tempfile.TemporaryDirectory() as folder:
     first = state.load()
     first["queue"].append({"merchant": "проверка"})
     check("заготовка не общая на всех", state.load()["queue"] == [])
+
+print()
+print("правка .env")
+
+образец = (
+    "# Токен бота из @BotFather\n"
+    "BOT_TOKEN=\n"
+    "\n"
+    "# Адрес веб-приложения\n"
+    "SHEET_URL=старый\n"
+)
+
+новый = config.patch_env_text(образец, {"BOT_TOKEN": "123:abc"})
+check("пустое значение заполнилось", "BOT_TOKEN=123:abc" in новый)
+check("комментарии на месте", "# Токен бота из @BotFather" in новый)
+check("чужая строка не тронута", "SHEET_URL=старый" in новый)
+
+новый = config.patch_env_text(образец, {"SHEET_LINK": "https://docs.google.com/x"})
+check("нового ключа не было — дописался",
+      новый.rstrip().endswith("SHEET_LINK=https://docs.google.com/x"))
+
+# Закомментированный пример не должен принимать значение: иначе мастер
+# впишет адрес в пример, а настоящая строка останется пустой.
+новый = config.patch_env_text("# SHEET_URL=пример\nSHEET_URL=\n",
+                              {"SHEET_URL": "https://script.google.com/x/exec"})
+check("пример под решёткой не тронут", "# SHEET_URL=пример" in новый)
+check("настоящая строка заполнилась",
+      "\nSHEET_URL=https://script.google.com/x/exec" in новый)
 
 print()
 print("лента")
