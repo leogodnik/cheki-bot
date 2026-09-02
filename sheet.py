@@ -13,12 +13,21 @@ import time
 
 import requests
 
-TIMEOUT = 20
+# Три замера подряд к боевому Apps Script: 22.5 с (ReadTimeout), 19.7 с
+# (успех), 20.2 с (ReadTimeout) — таблица отвечает около двадцати секунд,
+# и прежние TIMEOUT = 20 не доживали до ответа две попытки из трёх. Шестьдесят
+# — запас поверх измеренных двадцати, а не бесконечное ожидание.
+TIMEOUT = 60
 CACHE_SECONDS = 300
 
 
 class SheetError(Exception):
     """Таблица не ответила или ответила не «ok»."""
+
+
+class EmptyCategories(SheetError):
+    """Таблица ответила, но лист «Статьи» пуст или переименован — это не то
+    же самое, что таблица вовсе не ответила, и требует другого текста."""
 
 
 def fetch_categories(url, secret):
@@ -27,7 +36,7 @@ def fetch_categories(url, secret):
     found = [str(item).strip() for item in answer.get("categories", [])
              if str(item).strip()]
     if not found:
-        raise SheetError("лист «Статьи» пуст или переименован")
+        raise EmptyCategories("лист «Статьи» пуст или переименован")
     return found
 
 
@@ -40,18 +49,31 @@ def categories(state, url, secret):
 
     Пустой список означает, что разбирать нельзя. Придумывать статьи агенту
     запрещено: в отчёте заведутся «Продукты», «Продукты питания» и «Еда»
-    вместо одной строки."""
+    вместо одной строки.
+
+    «Откуда» различает не только «кэш» / «запас» / «таблица», но и, когда
+    список пуст, почему: «нет» — таблица ответила, а лист «Статьи» пуст или
+    переименован; «молчит» — таблица вовсе не ответила (таймаут, обрыв
+    соединения, не JSON). Первое — повод чинить таблицу, второе — повод
+    подождать и попробовать снова; звать их одним словом «нет» посылало
+    человека чинить то, что не сломано."""
     now = time.time()
     if state["categories"] and now - state["categories_at"] < CACHE_SECONDS:
         return state["categories"], "кэш"
     try:
         found = fetch_categories(url, secret)
+    except EmptyCategories as error:
+        if state["categories"]:
+            print(f"лист «Статьи» пуст ({error}) — работаю по последнему списку")
+            return state["categories"], "запас"
+        print(f"лист «Статьи» пуст ({error}) — запаса тоже нет")
+        return [], "нет"
     except (SheetError, requests.RequestException) as error:
         if state["categories"]:
             print(f"справочник не прочитался ({error}) — работаю по последнему списку")
             return state["categories"], "запас"
-        print(f"справочник не прочитался ({error}) — запаса тоже нет")
-        return [], "нет"
+        print(f"таблица не ответила ({error}) — запаса тоже нет")
+        return [], "молчит"
     state["categories"] = found
     state["categories_at"] = now
     return found, "таблица"
@@ -61,6 +83,27 @@ def append_row(url, secret, row):
     """Одна строка на лист «Расходы». Номер строки — в ответе."""
     answer = ask("POST", url, json=dict(row, secret=secret))
     return answer.get("row")
+
+
+def edit_row(url, secret, row, was_merchant, was_amount, changes):
+    """Правит уже записанную строку. Отдаёт список полей, которые мост записал.
+
+    В changes кладутся только изменившиеся поля — считает их бот, до вызова.
+    Мост перечисляет в ответе всё, что получил, и с прежним значением не
+    сравнивает: пришлёшь неизменившееся поле — оно вернётся в changed, и лента
+    расскажет про правку, которой не было.
+
+    was_merchant и was_amount — то, что бот рассчитывает увидеть в этой строке.
+    Человек мог вставить строки в таблицу руками, и номер начнёт указывать не
+    туда; мост сверяет их перед записью и при несовпадении не пишет ничего.
+
+    Очереди у правки нет, в отличие от append_row: отложенная правка легла бы
+    на строку, которая к тому времени успела сдвинуться ещё раз. Не прошло —
+    человеку говорится сразу."""
+    answer = ask("POST", url, json=dict(changes, secret=secret, op="правка",
+                                        row=row, was_merchant=was_merchant,
+                                        was_amount=was_amount))
+    return answer.get("changed", [])
 
 
 def deliver(state, url, secret, row):
@@ -114,6 +157,34 @@ if __name__ == "__main__":
             "status": "проверить", "file": "",
         })
         print(f"записал строку {number} — удалите её из таблицы руками")
+    elif len(sys.argv) > 1 and sys.argv[1] == "правка":
+        # Проверка правки должна быть самодостаточной: сама заводит строку,
+        # сама её правит и сама же ломает сверку. Раньше это делалось руками
+        # через curl, и человек подставлял в запрос номер строки и секрет —
+        # то есть проверка начиналась с двух мест, где можно ошибиться.
+        number = append_row(env["sheet_url"], env["sheet_secret"], {
+            "date": "2026-09-01", "amount": 1, "currency": "RUB",
+            "merchant": "проверка правки", "category": "Прочее",
+            "payment": "неизвестно", "source": "проверка", "who": "терминал",
+            "status": "проверить", "file": "",
+        })
+        print(f"записал строку {number}: «проверка правки», сумма 1")
+
+        changed = edit_row(env["sheet_url"], env["sheet_secret"], number,
+                           "проверка правки", 1, {"amount": 2})
+        print(f"поправил {changed} — в таблице теперь 2")
+
+        # Тот же запрос второй раз: в строке уже 2, а мы говорим, что ждём 1.
+        # Сверка не сойдётся, и это единственный правильный исход.
+        try:
+            edit_row(env["sheet_url"], env["sheet_secret"], number,
+                     "проверка правки", 1, {"amount": 3})
+            print("!! мост записал правку по несошедшейся сверке — так быть не должно")
+            sys.exit(1)
+        except SheetError as error:
+            print(f"вторая правка отклонена, и это правильно: {error}")
+
+        print(f"строку {number} удалите из таблицы руками")
     else:
         found = fetch_categories(env["sheet_url"], env["sheet_secret"])
         print(f"статей в справочнике: {len(found)}")

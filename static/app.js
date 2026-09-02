@@ -9,10 +9,11 @@
   var app = document.getElementById("app");
   var col = document.querySelector("#p-feed .col");
   var flow = document.querySelector("#p-feed .flow");
-  var last = 0;          /* номер последнего показанного события */
+  var last = 0;          /* курсор ленты — с этого номера просить опросом дальше */
   var shown = {};        /* какие события уже нарисованы */
   var records = [];      /* события «запись» — из них собирается сайдбар */
   var life = null;       /* метка текущего запуска бота, из последнего ответа */
+  var sheetLink = "";    /* адрес таблицы, из состояния — может не приехать вовсе */
 
   var today = document.getElementById("today");
   var todayNone = document.getElementById("today-none");
@@ -24,6 +25,48 @@
   var PAYMENTS = {"карта": "картой", "наличные": "наличными",
                   "перевод": "переводом", "неизвестно": ""};
   var SIGNS = {"RUB": " ₽", "USD": " $", "EUR": " €", "другая": ""};
+
+  /* Фразы плашки разбора. Идут по порядку — примерно в том, в каком бот и
+     правда работает: прочитать, найти итог, подобрать статью, записать. Дойдя
+     до последней, плашка на ней и остаётся: возвращаться к «смотрю чек» после
+     «записываю в таблицу» — врать про то, что происходит.
+
+     Между рабочими фразами расставлены шуточные — «щурюсь на мелкий шрифт»,
+     «спорю сам с собой о статье». Ждать полминуты веселее, а чем дольше ждёшь,
+     тем дальше уходишь по списку: за пятнадцать секунд их и не увидишь.
+     Шутка при этом ни разу не врёт про результат — врать про сумму, статью
+     или строку в таблице нельзя даже в шутку. */
+  var WORDS = {
+    "фото": ["Смотрю чек", "Читаю строки", "Щурюсь на мелкий шрифт",
+             "Разбираю позиции", "Ищу, где итог", "Считываю сумму",
+             "Проверяю копейки", "Ищу, куда делся рубль", "Нахожу дату",
+             "Смотрю, кто продавец", "Держу чек против света",
+             "Соображаю, на что потратили", "Стараюсь не осуждать покупки",
+             "Открываю справочник статей", "Подбираю статью",
+             "Спорю сам с собой о статье", "Перепроверяю себя",
+             "Считаю на пальцах", "Разбираю, что смазалось", "Собираю строку",
+             "Перекладываю бумажки", "Стучусь в таблицу",
+             "Уговариваю таблицу открыться", "Записываю в таблицу"],
+    "текст": ["Разбираю", "Вчитываюсь", "Читаю между строк", "Ищу сумму",
+              "Перечитываю ещё раз", "Смотрю валюту", "Нахожу дату",
+              "Прикидываю, чем платили", "Домысливаю сокращения",
+              "Соображаю, на что потратили", "Стараюсь не осуждать покупки",
+              "Открываю справочник статей", "Подбираю статью",
+              "Перебираю статьи по одной", "Спорю сам с собой о статье",
+              "Перепроверяю себя", "Считаю на пальцах", "Морщу лоб",
+              "Собираю строку", "Раскладываю по полочкам", "Стучусь в таблицу",
+              "Уговариваю таблицу открыться", "Записываю в таблицу"]
+  };
+
+  /* Пятьдесят миллисекунд на букву, стирание вдвое быстрее, весь цикл фразы —
+     три секунды. Длинную фразу печатать дольше, поэтому стоять она будет
+     меньше; цикл при этом остаётся ровным, и плашка не частит. */
+  var CYCLE = 3000, CHAR = 50, MIN_HOLD = 420;
+
+  /* Человек мог попросить систему «уменьшить движение». Тогда фраза стоит
+     целиком и ничего не бежит: такую настройку ставят не из вредности. */
+  var still = window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   /* 1004.7 → «1 004,70». Разряды отбиваем неразрывным пробелом, иначе строка
      переносится посреди числа. Дробную часть при этом не трогаем: правило
@@ -66,6 +109,13 @@
     burger.setAttribute("aria-expanded", String(open));
   });
 
+  /* Склейка непустых кусков через « · ». Пустое поле агент возвращает честно:
+     у «50 рублей сиги» продавца нет, называть его нечем и выдумывать нельзя.
+     Без отсева заголовок начинался бы с разделителя: « · 50,00 ₽». */
+  function join(parts) {
+    return parts.filter(function (part) { return part; }).join(" · ");
+  }
+
   function el(tag, cls, text) {
     var node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -100,32 +150,185 @@
     if (event.author) box.appendChild(el("div", "src", event.author + " · " + event.channel));
   }
 
-  /* Реплика человека — то, что он прислал. */
+  /* «строка 5» — ссылка на эту самую строку в таблице. Google Sheets открывает
+     нужную строку якорем #gid=…&range=A5; gid листа «Расходы» уже есть в адресе
+     из .env, оттуда его и берём. Запасной ноль — на случай адреса без gid:
+     тогда откроется первый лист, и это всё равно лучше, чем ничего.
+
+     Адреса таблицы может не быть, и приезжает он состоянием — то есть позже
+     первого события ленты. Тогда номер остаётся обычным текстом: притворяться
+     ссылкой он не должен, — а href проставит linkRows(), когда адрес придёт. */
+  function rowHref(row) {
+    if (!sheetLink) return "";
+    var gid = sheetLink.match(/[?#&]gid=(\d+)/);
+    return sheetLink.split(/[?#]/)[0] + "#gid=" + (gid ? gid[1] : "0") +
+      "&range=A" + row;
+  }
+
+  function rowRef(row, tail) {
+    var mark = el("em");
+    var link = el("a", "rw", "строка " + row);
+    link.dataset.row = row;
+    link.target = "_blank";
+    link.rel = "noopener";
+    var href = rowHref(row);
+    if (href) link.href = href;
+    mark.appendChild(link);
+    if (tail) mark.appendChild(document.createTextNode(tail));
+    return mark;
+  }
+
+  function linkRows() {
+    col.querySelectorAll("a.rw").forEach(function (link) {
+      var href = rowHref(link.dataset.row);
+      if (href) link.href = href;
+      else link.removeAttribute("href");
+    });
+  }
+
+  function attach(name) {
+    var att = el("span", "att");
+    att.appendChild(icon("i-clip"));
+    att.appendChild(document.createTextNode(name));
+    return att;
+  }
+
+  /* Реплика человека — то, что он прислал. Фотография показывается самой
+     фотографией: имя вроде «2026-09-02_234322_Леонид.jpg» человеку ничего не
+     говорит, а свой чек он узнаёт с одного взгляда. Картинку отдаёт бот из
+     папки «чеки», поэтому превью переживает перезагрузку страницы. */
   function mine(event) {
     var box = el("div", "u");
-    if (event.file) {
-      var att = el("span", "att");
-      att.appendChild(icon("i-clip"));
-      att.appendChild(document.createTextNode(event.file));
-      box.appendChild(att);
+    if (event.photo) {
+      box.className = "u pic";
+      var img = el("img");
+      img.src = "/photo/" + encodeURIComponent(event.photo);
+      img.alt = "Фотография чека, которую прислали";
+      /* Картинка приходит после разметки и меняет высоту пузыря — лента
+         должна остаться прокрученной вниз. */
+      img.addEventListener("load", function () {
+        flow.scrollTop = flow.scrollHeight;
+      });
+      /* Файл удалили или переименовали руками — возвращаемся к имени.
+         Сломанный прямоугольник вместо чека человек видеть не должен. */
+      img.addEventListener("error", function () {
+        box.className = "u";
+        box.textContent = "";
+        box.appendChild(attach(event.file || event.photo));
+      });
+      box.appendChild(img);
+    } else if (event.file) {
+      box.appendChild(attach(event.file));
     } else {
       box.textContent = event.text;
     }
     return box;
   }
 
-  /* «Смотрю чек…» — плашка на 15–50 секунд. Её уберёт событие с тем же
-     номером задачи. */
+  /* Плашка на те 15–50 секунд, пока бот читает. Её уберёт событие с тем же
+     номером задачи.
+
+     Молчащая плашка эти секунды выглядела мёртвой, поэтому здесь всё живёт:
+     значок сканируется, фраза печатается по буквам и сменяется следующей,
+     справа идёт счётчик секунд. Фразы разные для фотографии и для текста —
+     разбор у них тоже разный. Событие без поля job — старая лента с прошлого
+     запуска бота: тогда, как и раньше, слова про фотографию. */
   function running(event) {
     var box = el("div", "b");
     box.dataset.task = event.task;
+
     var hdr = el("div", "hdr");
-    hdr.appendChild(icon("mark"));
-    var run = el("span", "run", "Смотрю чек… ");
-    run.appendChild(el("small", "", "15–50 сек"));
+    /* Обёртка нужна ради полоски сканера: у <svg> своих псевдоэлементов нет. */
+    var ico = el("span", "ico");
+    ico.appendChild(icon("mark"));
+    hdr.appendChild(ico);
+
+    var run = el("span", "run");
+    var word = el("span", "wd");
+    var dots = el("span", "dots");
+    dots.appendChild(el("i", "", "."));
+    dots.appendChild(el("i", "", "."));
+    dots.appendChild(el("i", "", "."));
+    var clock = el("small", "", "");
+    run.appendChild(word);
+    run.appendChild(el("span", "caret"));
+    run.appendChild(dots);
+    run.appendChild(clock);
     hdr.appendChild(run);
     box.appendChild(hdr);
+
+    /* Печать и счётчик заводятся, когда плашка уже в ленте: до этого
+       isConnected у неё false, и первый же тик принял бы её за убранную. */
+    box.start = function () {
+      type(box, run, word, WORDS[event.job === "текст" ? "текст" : "фото"]);
+      count(box, clock, event.at);
+    };
     return box;
+  }
+
+  /* Фраза печатается по буквам, стоит и стирается — и так по кругу. Пока
+     печатается и стирается, мигает каретка; пока стоит целиком — оживают
+     точки многоточия: вместе они бы рябили.
+
+     Плашку убирает ответ бота, а всю ленту — перезапуск бота. Таймеры должны
+     уходить вместе с ней, иначе они будут писать в выброшенную разметку до
+     закрытия вкладки; узнаём об этом по isConnected, и он ловит оба случая
+     сразу. */
+  function type(box, run, word, words) {
+    var step = 0;
+
+    function letters(text, from, to, pace, done) {
+      var n = from;
+      (function next() {
+        if (!box.isConnected) return;
+        word.textContent = text.slice(0, n);
+        if (n === to) { done(); return; }
+        n += to > from ? 1 : -1;
+        setTimeout(next, pace);
+      })();
+    }
+
+    function cycle() {
+      var text = words[step];
+      run.dataset.phase = "type";
+      letters(text, 0, text.length, CHAR, function () {
+        run.dataset.phase = "hold";
+        if (step >= words.length - 1) return;   /* последнюю фразу держим */
+        /* Что не ушло на печать и стирание — стоит. Нижняя граница нужна
+           самым длинным фразам: иначе они мелькали бы, не успев прочитаться. */
+        setTimeout(function () {
+          if (!box.isConnected) return;
+          run.dataset.phase = "erase";
+          letters(text, text.length, 0, CHAR / 2, function () {
+            step += 1;
+            cycle();
+          });
+        }, Math.max(MIN_HOLD, CYCLE - text.length * CHAR * 1.5));
+      });
+    }
+
+    if (still) {
+      run.dataset.phase = "hold";
+      word.textContent = words[0];
+    } else {
+      cycle();
+    }
+  }
+
+  /* Счётчик секунд от начала разбора. Начало берём из события, а не из
+     момента отрисовки: страницу могли открыть или перезагрузить, когда чек
+     уже читается. Верхней границы нет намеренно — обещать «15–50 сек» и молча
+     упереться в пятьдесят хуже, чем показывать правду. */
+  function count(box, clock, at) {
+    var since = at ? at * 1000 : Date.now();
+    var timer = setInterval(show, 250);
+    show();
+
+    function show() {
+      if (!box.isConnected) { clearInterval(timer); return; }
+      clock.textContent =
+        Math.max(0, Math.round((Date.now() - since) / 1000)) + " сек";
+    }
   }
 
   /* Фраза бота: отказ или пояснение. Её сочиняет агент или сам бот — здесь
@@ -138,7 +341,7 @@
     var title = el("b", "", event.text);
     if (event.row) {
       title.appendChild(document.createTextNode(" — "));
-      title.appendChild(el("em", "", "строка " + event.row));
+      title.appendChild(rowRef(event.row));
     }
     hdr.appendChild(title);
     box.appendChild(hdr);
@@ -151,13 +354,15 @@
   function written(event) {
     var box = el("div", "b");
     source(event, box);
-    var title = event.merchant;
+    var title = [event.merchant];
     if (event.amount !== null && event.amount !== undefined) {
-      title += " · " + money(event.amount) + (SIGNS[event.currency] || "");
+      title.push(money(event.amount) + (SIGNS[event.currency] || ""));
     } else if (event.date) {
-      title += " · " + day(event.date);
+      title.push(day(event.date));
     }
-    box.appendChild(head(title));
+    /* Не осталось ни продавца, ни суммы, ни даты — заголовок пустым не
+       оставляем: «Расход» коротко и не врёт, раз запись вообще появилась. */
+    box.appendChild(head(join(title) || "Расход"));
     box.appendChild(details(event));
     return box;
   }
@@ -172,13 +377,12 @@
       sub.appendChild(el("span", "warn", trouble[0]));
       sub.appendChild(document.createTextNode(" — "));
     } else {
-      var facts = [event.category, PAYMENTS[event.payment], day(event.date)]
-        .filter(function (part) { return part; });
-      sub.appendChild(document.createTextNode(facts.join(" · ") + " — "));
+      var facts = join([event.category, PAYMENTS[event.payment], day(event.date)]);
+      sub.appendChild(document.createTextNode(facts ? facts + " — " : ""));
     }
     if (event.row) {
-      sub.appendChild(el("em", "", "строка " + event.row +
-        (event.status === "проверить" ? ", на проверку" : "")));
+      sub.appendChild(rowRef(event.row,
+        event.status === "проверить" ? ", на проверку" : ""));
     } else {
       sub.appendChild(el("em", "", "в таблицу пока не попало"));
     }
@@ -207,6 +411,7 @@
              : said(event);
     node.dataset.id = event.id;
     col.appendChild(node);
+    if (node.start) node.start();
 
     if (event.kind === "запись") records.push(event);
     flow.scrollTop = flow.scrollHeight;
@@ -222,12 +427,15 @@
 
     navTable.querySelector(".r").textContent =
       state.categories ? state.categories + " статей" : "";
-    if (state.sheet_link) {
-      navTable.href = state.sheet_link;
+    sheetLink = state.sheet_link || "";
+    if (sheetLink) {
+      navTable.href = sheetLink;
     } else {
       /* Адреса таблицы нет — пункт не должен притворяться ссылкой. */
       navTable.removeAttribute("href");
     }
+    /* Номера строк в уже нарисованной ленте ждут этого адреса. */
+    linkRows();
 
     document.querySelectorAll(".engine-badge").forEach(function (badge) {
       badge.textContent = state.engine;
@@ -252,8 +460,10 @@
       var item = el("button", "li");
       item.type = "button";
       item.appendChild(el("span", "bl" + (record.status === "проверить" ? " chk" : "")));
+      /* Запасное слово стоит на месте продавца, а не всей строки: иначе
+         трата без продавца подписалась бы одним именем приславшего. */
       item.appendChild(el("span", "nm",
-        record.merchant + (record.author ? " · " + record.author : "")));
+        join([record.merchant || "Расход", record.author])));
       item.appendChild(el("span", "am",
         record.amount === null || record.amount === undefined ? "—" : money(record.amount)));
       item.addEventListener("click", function () {
@@ -278,8 +488,10 @@
 
     /* У каждого запуска бота своя метка life. Сменилась — прошлая жизнь
        нарисовала не ту ленту: стираем нарисованное и last, а Math.max для
-       этого ответа пропускаем (он мог прийти с отправки — она везёт только
-       свои события). Ближайший опрос переспросит с нуля и довезёт остальное. */
+       этого ответа пропускаем — ответ отправки везёт только свои события,
+       не всю ленту, и его last нельзя принимать за правду о том, что уже
+       видено. Курсор наверстает опрос: у него есть свой after, и since()
+       отвечает по нему точно. */
     var restarted = life !== null && answer.life !== life;
     if (restarted) {
       shown = {};

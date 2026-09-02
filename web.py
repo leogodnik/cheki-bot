@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, abort, jsonify, render_template, request, send_file
 
 import agent
 import config
@@ -36,6 +36,26 @@ def create(env, st, jobs, blocked=""):
     @app.get("/")
     def page():
         return render_template("workspace.html")
+
+    @app.get("/photo/<name>")
+    def sent_photo(name):
+        """Присланная фотография — для превью в ленте.
+
+        По ходу разбора файл переезжает из входящие/ в готово/ или спорные/,
+        поэтому ищем во всех трёх: пузырь в ленте не должен гаснуть оттого,
+        что бот дочитал чек.
+
+        Из адреса берётся только последний кусок имени: «..» и подкаталоги не
+        должны уводить наружу папки «чеки». Страница локальная, но отдавать
+        по адресу произвольный файл с диска — не то, чем стоит рисковать."""
+        safe = Path(name).name
+        if Path(safe).suffix.lower() not in PICTURES:
+            abort(404)
+        for folder in (intake.INBOX, intake.DONE, intake.DOUBTFUL):
+            path = folder / safe
+            if path.is_file():
+                return send_file(path)
+        abort(404)
 
     @app.get("/api/events")
     def events():
@@ -104,17 +124,20 @@ def snapshot(env, st, blocked):
 def published(events):
     """Ответ страницы: что появилось в ленте прямо сейчас.
 
-    Курсор — номер последнего события всей ленты, а не только этих двух: за
-    те же секунды в ленту мог попасть чужой чек из телеграма, и следующий
-    опрос обязан его увидеть. Номер своих последних событий для этого не
-    годится — он их не пропустит. Своих же событий страница при этом не
-    покажет второй раз: их номера в любом случае не больше номера ленты.
+    Курсор всегда 0 — не потому что лента пуста, а потому что этот ответ
+    не знает, что страница уже видела. У /api/say нет своего after, в
+    отличие от /api/events: попробуй мы отдать здесь номер конца ленты
+    (или даже номер перед своими событиями), рисковали бы перепрыгнуть
+    через чужую запись, которая легла между последним опросом страницы и
+    этой отправкой, — Math.max на странице взял бы число побольше и решил
+    бы, что чужое уже видено. Курсором ленты командует опрос: у него есть
+    свой after, и since() отвечает по нему точно, не гадая. Цена — лишний
+    заход опроса на каждую отправку, а не потерянная запись.
 
     Метка жизни едет и отсюда, не только из опроса: страница может узнать
     о перезапуске бота из ответа на собственную отправку, не дожидаясь
     следующего опроса."""
-    _, last = feed.since(0)
-    return {"events": events, "last": last, "life": feed.LIFE}
+    return {"events": events, "last": 0, "life": feed.LIFE}
 
 
 def photo(st, jobs, upload, author):
@@ -151,17 +174,21 @@ def photo(st, jobs, upload, author):
     path = intake.save_photo(data, author, Path(name).suffix.lower())
     job = {"kind": "фото", "payload": str(path), "channel": "браузер",
            "author": author, "chat_id": None, "file": path.name, "mark": mark}
-    return start(jobs, job, mine)
+    # Имя на диске, а не то, как файл звался у человека: по нему страница
+    # просит превью маршрутом /photo. Имя от человека остаётся в событии на
+    # случай, если файла уже нет и пузырь вернётся к подписи.
+    return start(jobs, job, dict(mine, photo=path.name))
 
 
 def start(jobs, job, mine):
     """Кладёт задание в очередь и рождает два события: реплику человека и
-    плашку «Смотрю чек…».
+    плашку «Смотрю чек…» (или «Разбираю…» — по виду задания).
 
     Ответ придёт отдельным событием через 15–50 секунд — держать на нём
     HTTP-запрос нельзя, браузер оборвёт его раньше."""
     job["task"] = uuid4().hex[:8]
-    born = [feed.add(mine), feed.add({"kind": "работа", "task": job["task"]})]
+    born = [feed.add(mine), feed.add({"kind": "работа", "task": job["task"],
+                                      "job": job["kind"]})]
     jobs.put(job)
     return born
 

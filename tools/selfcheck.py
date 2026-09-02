@@ -17,7 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import checks
 import feed
+import intake
+import sheet
 import state
+import web
 
 passed = 0
 failed = []
@@ -108,6 +111,23 @@ for number in range(feed.LIMIT + 50):
 fresh, last = feed.since(0)
 check("лента не растёт бесконечно", len(fresh) == feed.LIMIT)
 check("выкидывается старое, а не новое", fresh[-1]["text"] == str(feed.LIMIT + 49))
+
+feed.forget()
+
+print()
+print("published() — ответ отправки из браузера")
+
+feed.forget()
+foreign = feed.add({"kind": "слово", "text": "мимо страницы"})
+mine = feed.add({"kind": "мой", "text": "моё"})
+result = web.published([mine])
+check("курсор всегда 0 — /api/say не знает, что страница уже видела",
+      result["last"] == 0)
+check("события отдаются как есть, свои не путаются с чужими",
+      result["events"] == [mine])
+check("метка жизни едет вместе с ответом", result["life"] == feed.LIFE)
+check("пустой список событий не роняет функцию",
+      web.published([])["last"] == 0)
 
 feed.forget()
 
@@ -222,6 +242,24 @@ check("сомнения агента доходят до человека",
 check("но сами по себе статуса не меняют", verdict["status"] == "готово")
 
 print()
+print("sheet.categories() — молчащая таблица не выдаётся за пустой лист")
+
+# Порт 1 на localhost: слушать там некому и не станет, отказ приходит сразу,
+# без ожидания TIMEOUT и без обращения к настоящей сети. Так же выглядела бы
+# для requests любая недоступная таблица.
+unreachable = "http://127.0.0.1:1/"
+
+blank = {"categories": [], "categories_at": 0}
+found, source = sheet.categories(blank, unreachable, "секрет")
+check("пустой запас и недостижимый адрес — источник «молчит», а не «нет»",
+      found == [] and source == "молчит")
+
+stocked = {"categories": ["Продукты", "Топливо"], "categories_at": 0}
+found, source = sheet.categories(stocked, unreachable, "секрет")
+check("запас на месте — недостижимый адрес по-прежнему отдаёт «запас»",
+      found == ["Продукты", "Топливо"] and source == "запас")
+
+print()
 print("копия мозга агента")
 
 # Боевой путь читает prompt.md. Дословная копия лежит ещё и в
@@ -242,6 +280,89 @@ if copy_path.exists():
         copy_text = copy_text.split("\n---\n", 1)[-1]
     check("тело expense-reader.md слово в слово совпадает с prompt.md",
           copy_text.strip("\n") == prompt_text.strip("\n"))
+
+print()
+print("память последней записи")
+with tempfile.TemporaryDirectory() as folder:
+    state.STATE_PATH = Path(folder) / "state.json"
+    memory = state.load()
+
+    check("в заготовке есть место под последнюю запись", memory["last"] == {})
+
+    check("у браузера адрес один на всех",
+          state.address("браузер", "Лена") == state.address("браузер", "Пётр"))
+    check("у каждого в телеграме свой адрес",
+          state.address("телеграм", "@maria") != state.address("телеграм", "@ivan"))
+    check("браузер и телеграм не сходятся в один адрес",
+          state.address("браузер", "@maria") != state.address("телеграм", "@maria"))
+
+    web_spot = state.address("браузер", "Лена")
+    tg = state.address("телеграм", "@maria")
+
+    check("пустая память ничего не отдаёт", state.last(memory, web_spot) is None)
+    check("и самой свежей записи в ней тоже нет",
+          state.newest(memory) == (None, None))
+
+    state.remember_last(memory, web_spot, {"row": 47, "fields": {"amount": 450},
+                                           "channel": "браузер", "author": "Лена"})
+    check("записанное помнится", state.last(memory, web_spot)["row"] == 47)
+    check("время проставляется само", state.last(memory, web_spot)["at"] > 0)
+    check("по чужому адресу своей строки нет", state.last(memory, tg) is None)
+
+    state.remember_last(memory, tg, {"row": 48, "fields": {"amount": 900},
+                                     "channel": "телеграм", "author": "@maria"})
+    check("самая свежая — та, что записана последней",
+          state.newest(memory) == (tg, state.last(memory, tg)))
+    check("своя строка на месте и после чужой записи",
+          state.last(memory, web_spot)["row"] == 47)
+
+    state.remember_last(memory, web_spot, {"row": 49, "fields": {"amount": 120},
+                                           "channel": "браузер", "author": "Лена"})
+    check("помним последнюю, а не все", state.last(memory, web_spot)["row"] == 49)
+
+    state.save(memory)
+    check("память переживает перезапуск", state.load()["last"][web_spot]["row"] == 49)
+
+
+print()
+print("сравнение записей")
+was = {"date": "2026-09-01", "amount": 450.0, "currency": "RUB",
+       "merchant": "Пятёрочка", "category": "Продукты", "payment": "карта",
+       "source": "текст", "who": "Лена", "status": "готово", "file": ""}
+
+check("одинаковые записи — пустой дифф", intake.diff(was, dict(was)) == {})
+check("изменилась сумма — в диффе только сумма",
+      intake.diff(was, dict(was, amount=480.0)) == {"amount": 480.0})
+check("450 и 450.0 — одна и та же сумма",
+      intake.diff(was, dict(was, amount=450)) == {})
+check("пустая клетка и None — одно и то же",
+      intake.diff(was, dict(was, file=None)) == {})
+check("стереть продавца — тоже правка",
+      intake.diff(was, dict(was, merchant="")) == {"merchant": ""})
+check("дифф ничего не исключает: подмену источника он бы тоже заметил",
+      intake.diff(was, dict(was, source="фото чека")) == {"source": "фото чека"})
+
+check("в задании на правку есть прошлая запись",
+      "Пятёрочка" in intake.rework(was, "не 450, а 480"))
+check("и слова человека", "не 450, а 480" in intake.rework(was, "не 450, а 480"))
+check("а происхождение строки агенту не показывается",
+      "Лена" not in intake.rework(was, "не 450, а 480"))
+
+now = dict(was, amount=480.0, category="Кафе и рестораны")
+check("одно поле — «Поправил сумму: 450 → 480»",
+      intake.retell(["amount"], was, now) == "Поправил сумму: 450 → 480")
+check("два поля — оба в одной фразе",
+      intake.retell(["amount", "category"], was, now) ==
+      "Поправил сумму: 450 → 480, статью: Продукты → Кафе и рестораны")
+check("копейки не теряются",
+      intake.retell(["amount"], was, dict(was, amount=480.5)) ==
+      "Поправил сумму: 450 → 480.50")
+check("пустое значение читается как «пусто»",
+      intake.retell(["merchant"], was, dict(was, merchant="")) ==
+      "Поправил продавца: Пятёрочка → пусто")
+check("незнакомое поле из ответа моста фразу не роняет",
+      "выдумка" in intake.retell(["выдумка"], was, now))
+
 
 print()
 if failed:
