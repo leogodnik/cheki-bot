@@ -213,7 +213,10 @@ check("пустая сумма с «не нашёл» — это просто ч
       and "сумма не прочиталась" in verdict["reasons"])
 
 verdict = checks.review(dict(clean, confidence="низкая"), categories, today)
-check("низкая уверенность ловится", verdict["status"] == "проверить")
+check("низкая уверенность доходит до человека",
+      "агент не уверен в прочитанном" in verdict["warnings"])
+check("но статуса не меняет: ресторанный чек, где не читается только вывеска, "
+      "остаётся годной строкой", verdict["status"] == "готово")
 
 verdict = checks.review(dict(clean, category="Еда"), categories, today)
 check("статья не из справочника заменяется на «Прочее»",
