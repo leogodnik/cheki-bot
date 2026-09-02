@@ -65,7 +65,7 @@ print("проверки без модели")
 today = date(2026, 8, 23)
 categories = ["Продукты", "Топливо", "Прочее"]
 clean = {
-    "is_expense": True, "date": "2026-08-20", "amount": 1004.7,
+    "intent": "расход", "date": "2026-08-20", "amount": 1004.7,
     "currency": "RUB", "merchant": "Пятёрочка", "category": "Продукты",
     "payment": "карта", "confidence": "высокая", "doubts": "",
     "reply": "Пятёрочка, 1004,70 ₽, продукты",

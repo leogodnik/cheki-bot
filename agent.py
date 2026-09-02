@@ -20,8 +20,10 @@ from engines.claude_code import EngineError
 
 BASE_DIR = Path(__file__).resolve().parent
 
-FIELDS = ("is_expense", "date", "amount", "currency", "merchant",
+FIELDS = ("intent", "date", "amount", "currency", "merchant",
           "category", "payment", "confidence", "doubts", "reply")
+
+INTENTS = ("расход", "правка", "не расход")
 
 ENGINES = {"claude_code": claude_code}
 
@@ -77,8 +79,8 @@ def validate(answer):
     missing = [field for field in FIELDS if field not in answer]
     if missing:
         raise AgentError("в ответе нет полей: " + ", ".join(missing))
-    if not isinstance(answer["is_expense"], bool):
-        raise AgentError("is_expense не «да» и не «нет»")
+    if answer["intent"] not in INTENTS:
+        raise AgentError("intent не «расход», не «правка» и не «не расход»")
     amount = answer["amount"]
     if amount is not None and (isinstance(amount, bool)
                                or not isinstance(amount, (int, float))):

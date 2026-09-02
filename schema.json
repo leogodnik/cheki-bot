@@ -1,12 +1,13 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["is_expense", "date", "amount", "currency", "merchant",
+  "required": ["intent", "date", "amount", "currency", "merchant",
                "category", "payment", "confidence", "doubts", "reply"],
   "properties": {
-    "is_expense": {
-      "type": "boolean",
-      "description": "Это запись о расходе? На «привет», меню, визитку и прочее — false."
+    "intent": {
+      "type": "string",
+      "enum": ["расход", "правка", "не расход"],
+      "description": "Что это за сообщение. «Расход» — новая трата. «Правка» — человек поправляет только что записанную трату («не 450, а 480»). «Не расход» — не про деньги: «привет», меню, визитка и прочее."
     },
     "date": {
       "type": "string",
