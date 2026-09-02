@@ -45,7 +45,8 @@ def create(env, st, jobs, blocked=""):
         намеренно: на локальном адресе опрос дешевле и понятнее на уроке."""
         after = request.args.get("after", default=0, type=int)
         fresh, last = feed.since(after)
-        return jsonify(events=fresh, last=last, state=snapshot(env, st, blocked))
+        return jsonify(events=fresh, last=last, life=feed.LIFE,
+                       state=snapshot(env, st, blocked))
 
     @app.post("/api/say")
     def say():
@@ -106,9 +107,13 @@ def published(events):
     те же секунды в ленту мог попасть чужой чек из телеграма, и следующий
     опрос обязан его увидеть. Номер своих последних событий для этого не
     годится — он их не пропустит. Своих же событий страница при этом не
-    покажет второй раз: их номера в любом случае не больше номера ленты."""
+    покажет второй раз: их номера в любом случае не больше номера ленты.
+
+    Метка жизни едет и отсюда, не только из опроса: страница может узнать
+    о перезапуске бота из ответа на собственную отправку, не дожидаясь
+    следующего опроса."""
     _, last = feed.since(0)
-    return {"events": events, "last": last}
+    return {"events": events, "last": last, "life": feed.LIFE}
 
 
 def photo(st, jobs, upload, author):
