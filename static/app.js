@@ -269,9 +269,12 @@
 
   function receive(answer) {
     (answer.events || []).forEach(place);
+    /* Назад номер не двигаем: ответ отправки и ответ опроса приходят в любом
+       порядке, и меньший из них заставил бы спросить уже показанное. */
     last = Math.max(last, answer.last);
     if (answer.state) paint(answer.state);
     drawToday();
+    /* Пустое начало и лента — одно место в двух состояниях. */
     show(col.children.length ? "feed" : "empty");
   }
 
