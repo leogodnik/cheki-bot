@@ -14,6 +14,8 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 
+import requests
+
 import agent
 import checks
 import config
@@ -80,13 +82,15 @@ def accept(env, st, job):
     path = Path(job["payload"]) if job["kind"] == "фото" else None
 
     if answer["intent"] == "правка":
-        # Правка последней записи появится в срезе 3. Пока честно говорим,
-        # что не умеем, и ничего не пишем: молча проглотить исправление
-        # хуже, чем отказать.
         if path:
+            # Фотография правкой не бывает: так агент отвечает, когда на
+            # снимке не чек. Ведём себя как с «не расход» — файл в спорные,
+            # человеку честный ответ.
             move(path, DOUBTFUL)
-        events.append({"kind": "слово", "text": "Правки пока не умею.",
-                       "note": "Пришлите трату заново, целиком."})
+            events.append({"kind": "слово", "text": "На фотографии не вижу расхода.",
+                           "note": "Правку пришлите текстом: «не 450, а 480»."})
+        else:
+            events += fix(env, st, job, categories, today, settings["engine"])
         return [sign(event, job) for event in events]
 
     if answer["intent"] == "не расход":
@@ -151,6 +155,122 @@ def accept(env, st, job):
         "file": path.name if path else "",
     })
     return [sign(event, job) for event in events]
+
+
+def fix(env, st, job, categories, today, engine):
+    """Правка последней записи. Возвращает события ленты.
+
+    Ответ первого разбора сюда не передаётся: из него взято одно — намерение.
+    Здесь агент зовётся второй раз, уже вместе с прошлой записью."""
+    here = memory.address(job["channel"], job["author"])
+    spot, fresh = memory.newest(st)
+
+    # В браузере лента общая: внизу может стоять запись из телеграма, и «не
+    # 450, а 480» тогда скорее всего про неё. Молча поправить вместо неё свою
+    # прошлую строку — худшее, что тут можно сделать, поэтому отказываем и
+    # показываем, чья это строка.
+    #
+    # В телеграме ровно наоборот: человек видит только свой чат, чужих записей
+    # для него не существует, и отказ по строке, которой он не видел, выглядел
+    # бы поломкой. Поэтому проверка на самую свежую запись — только для
+    # браузера, а память по каналам работает в обоих.
+    if job["channel"] == "браузер" and fresh and spot != here:
+        line = (f"строка {fresh['row']}" if fresh["row"]
+                else "запись, ещё не доехавшая до таблицы")
+        return [{
+            "kind": "слово",
+            "text": f"Не трогаю: последняя запись не ваша — {line}, "
+                    f"{fresh['author']} · {fresh['channel']}.",
+            "note": "Правлю только то, что записано в этом же окне. "
+                    "Чужую строку поправьте в таблице руками.",
+        }]
+
+    mine = memory.last(st, here)
+    if mine is None:
+        return [{"kind": "слово", "text": "Пока нечего править — я ещё ничего не записывал.",
+                 "note": "Пришлите трату, а поправить её можно следующим сообщением."}]
+    if mine["row"] is None:
+        # Строка ушла в очередь и номера у неё пока нет. Править по номеру
+        # соседней строки нельзя — там чужой расход.
+        return [{"kind": "слово",
+                 "text": "Последняя запись ещё не доехала до таблицы — править нечего.",
+                 "note": "Она уедет сама, когда таблица ответит. Тогда и поправим."}]
+
+    old = mine["fields"]
+    try:
+        answer = agent.parse("текст", rework(old, job["payload"]), categories,
+                             today, engine)
+    except agent.AgentError as error:
+        print(f"агент не справился с правкой: {error}")
+        return [{"kind": "слово", "text": "Не смог разобрать правку.",
+                 "note": "Напишите, что поправить: «не 450, а 480»."}]
+
+    if answer["intent"] != "правка":
+        # Увидев прошлую запись, агент передумал: это не правка, а новая
+        # трата. Дописать её отсюда нельзя — путь записи в проекте один, и он
+        # в accept(); второго такого пути заводить не будем.
+        return [{"kind": "слово", "text": "Это похоже не на правку, а на новую трату.",
+                 "note": "Пришлите её отдельным сообщением."}]
+
+    # Проверки без модели те же самые: правка — такая же запись, и дата из
+    # будущего в ней ловится так же. Статус пересчитывается, и это важно в обе
+    # стороны: продиктованная сумма снимает с строки пометку «проверить», а
+    # правка, испортившая дату, эту пометку ставит.
+    verdict = checks.review(answer, categories, today)
+    amount = answer["amount"] if checks.is_number(answer["amount"]) else ""
+
+    # Новая запись собирается из старой: source, who и file остаются как были.
+    # Поэтому дифф их и не увидит — не потому, что мы их из него выкинули.
+    new = dict(old,
+               date=answer["date"],
+               amount=amount,
+               currency=answer["currency"],
+               merchant=answer["merchant"],
+               category=verdict["category"],
+               payment=answer["payment"],
+               status=verdict["status"])
+
+    changes = diff(old, new)
+    if not changes:
+        # Мост на такой запрос ответил бы «в правке не пришло ни одного поля
+        # строки: менять нечего» — правильный отказ, но человеку он не про то.
+        # Запрос, отказ которого известен заранее, лучше не посылать.
+        return [{"kind": "слово",
+                 "text": f"Ничего не изменилось — строка {mine['row']} и так такая.",
+                 "note": answer["reply"]}]
+
+    try:
+        changed = sheet.edit_row(env["sheet_url"], env["sheet_secret"],
+                                 mine["row"], old["merchant"], old["amount"],
+                                 changes)
+    except sheet.SheetError as error:
+        # Отказ моста написан для человека — передаём его дословно. «Строка 48
+        # изменилась: ожидались „Пятёрочка“ и 450, а в таблице „Магнит“ и 980»
+        # понятнее всего, что мы могли бы сочинить вместо него: по этой фразе
+        # видно, куда уехала строка.
+        print(f"таблица не приняла правку: {error}")
+        return [{"kind": "слово", "text": f"Не поправил строку {mine['row']}.",
+                 "note": str(error)}]
+    except requests.RequestException as error:
+        # А это написано для программиста: «HTTPSConnectionPool… Max retries
+        # exceeded» человеку не говорит ничего. В терминал — как есть, в ленту
+        # — своими словами.
+        print(f"таблица не ответила на правку: {error}")
+        return [{"kind": "слово",
+                 "text": f"Таблица не ответила — строка {mine['row']} осталась прежней.",
+                 "note": "Очереди у правки нет, попробуйте ещё раз."}]
+
+    # Поправленная строка снова становится последней, и по времени тоже:
+    # следующее «нет, 500» ляжет на неё же, а не на ту, что была до правки.
+    memory.remember_last(st, here, dict(mine, fields=new))
+
+    # Фраза строится по changed из ответа таблицы, а не по нашему changes:
+    # в ленте должно стоять то, что таблица подтвердила.
+    event = {"kind": "слово", "text": retell(changed, old, new), "row": mine["row"]}
+    trouble = verdict["reasons"] + verdict["warnings"]
+    if trouble:
+        event["note"] = "; ".join(trouble)
+    return [event]
 
 
 def sign(event, job):
