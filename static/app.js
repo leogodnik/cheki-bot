@@ -67,6 +67,13 @@
     burger.setAttribute("aria-expanded", String(open));
   });
 
+  /* Склейка непустых кусков через « · ». Пустое поле агент возвращает честно:
+     у «50 рублей сиги» продавца нет, называть его нечем и выдумывать нельзя.
+     Без отсева заголовок начинался бы с разделителя: « · 50,00 ₽». */
+  function join(parts) {
+    return parts.filter(function (part) { return part; }).join(" · ");
+  }
+
   function el(tag, cls, text) {
     var node = document.createElement(tag);
     if (cls) node.className = cls;
@@ -195,13 +202,15 @@
   function written(event) {
     var box = el("div", "b");
     source(event, box);
-    var title = event.merchant;
+    var title = [event.merchant];
     if (event.amount !== null && event.amount !== undefined) {
-      title += " · " + money(event.amount) + (SIGNS[event.currency] || "");
+      title.push(money(event.amount) + (SIGNS[event.currency] || ""));
     } else if (event.date) {
-      title += " · " + day(event.date);
+      title.push(day(event.date));
     }
-    box.appendChild(head(title));
+    /* Не осталось ни продавца, ни суммы, ни даты — заголовок пустым не
+       оставляем: «Расход» коротко и не врёт, раз запись вообще появилась. */
+    box.appendChild(head(join(title) || "Расход"));
     box.appendChild(details(event));
     return box;
   }
@@ -216,9 +225,8 @@
       sub.appendChild(el("span", "warn", trouble[0]));
       sub.appendChild(document.createTextNode(" — "));
     } else {
-      var facts = [event.category, PAYMENTS[event.payment], day(event.date)]
-        .filter(function (part) { return part; });
-      sub.appendChild(document.createTextNode(facts.join(" · ") + " — "));
+      var facts = join([event.category, PAYMENTS[event.payment], day(event.date)]);
+      sub.appendChild(document.createTextNode(facts ? facts + " — " : ""));
     }
     if (event.row) {
       sub.appendChild(rowRef(event.row,
@@ -299,8 +307,10 @@
       var item = el("button", "li");
       item.type = "button";
       item.appendChild(el("span", "bl" + (record.status === "проверить" ? " chk" : "")));
+      /* Запасное слово стоит на месте продавца, а не всей строки: иначе
+         трата без продавца подписалась бы одним именем приславшего. */
       item.appendChild(el("span", "nm",
-        record.merchant + (record.author ? " · " + record.author : "")));
+        join([record.merchant || "Расход", record.author])));
       item.appendChild(el("span", "am",
         record.amount === null || record.amount === undefined ? "—" : money(record.amount)));
       item.addEventListener("click", function () {
