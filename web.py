@@ -69,6 +69,13 @@ def create(env, st, jobs, blocked=""):
         return jsonify(events=fresh, last=last, life=feed.LIFE,
                        state=snapshot(env, st, blocked))
 
+    @app.get("/api/engines")
+    def engines():
+        """Что установлено. Отдельно от снимка состояния, потому что кнопка
+        «Проверить снова» в мастере должна спросить заново, а не получить
+        минутный кэш."""
+        return jsonify(engines=agent.versions(fresh=True), titles=agent.TITLES)
+
     @app.post("/api/say")
     def say():
         """Приём из браузера: фотография или текст.
@@ -116,6 +123,13 @@ def snapshot(env, st, blocked):
         "categories": len(st["categories"]),
         "sheet_link": env["sheet_link"],
         "engine": agent.TITLES.get(settings["engine"], settings["engine"]),
+        # Ключ движка, а не название: по нему отмечается точка в переключателе.
+        # Поле engine при этом остаётся названием — его читает бейдж в поле
+        # ввода, и переименовать его значит без нужды тронуть чужой код.
+        "engine_key": settings["engine"],
+        "engines": agent.versions(),
+        "allowed": settings.get("allowed", []),
+        "knocked": settings.get("knocked", []),
         "telegram": bool(env["bot_token"]),
         "blocked": blocked,
     }

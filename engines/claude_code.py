@@ -23,6 +23,10 @@ PROMPT_PATH = BASE_DIR / "prompt.md"
 SCHEMA_PATH = BASE_DIR / "schema.json"
 
 MODELS = {"фото": "sonnet", "текст": "haiku"}
+
+# Имя команды в терминале. Отсюда его берёт agent.versions(), чтобы спросить
+# версию, — а не из строки, вписанной в третьем месте.
+COMMAND = "claude"
 TIMEOUT = 180
 
 

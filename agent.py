@@ -16,7 +16,9 @@ bot.py не изменился ни строкой.
 """
 
 import json
+import subprocess
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -33,6 +35,13 @@ ENGINES = {"claude_code": claude_code, "codex": codex}
 
 # Как движок называется в сайдбаре. Ключ — то, что лежит в settings.json.
 TITLES = {"claude_code": "Claude Code", "codex": "Codex"}
+
+# Ответ живёт минуту. Сайдбар опрашивает сервер раз в три секунды, и
+# запускать по два процесса на каждый заход — сорок лишних запусков в минуту
+# ради строки, которая меняется раз в месяц.
+CHECK_SECONDS = 60
+
+_found = {"at": 0, "engines": {}}
 
 
 class AgentError(Exception):
@@ -95,6 +104,50 @@ def validate(answer):
     return answer
 
 
+def versions(fresh=False):
+    """Какие движки установлены и каких версий.
+
+    Отдаёт словарь вида {"claude_code": "2.1.232", "codex": ""}. Пустая строка
+    значит «не установлен»; отдельного поля «нашли или нет» нет намеренно —
+    одно значение проще показать и невозможно рассогласовать со вторым.
+
+    Проверка живая, а не однажды записанная в settings.json: движок мог
+    исчезнуть после установки — переименовали, снесли, сменили PATH. Спека
+    требует, чтобы в этом случае строка в сайдбаре погасла, а бот не падал."""
+    now = time.time()
+    if not fresh and now - _found["at"] < CHECK_SECONDS:
+        return _found["engines"]
+    _found["engines"] = {key: version_of(module.COMMAND)
+                         for key, module in ENGINES.items()}
+    _found["at"] = now
+    return _found["engines"]
+
+
+def version_of(command):
+    """`claude --version` одной строкой. Не отвечает — пустая строка.
+
+    Таймаут пять секунд: движок, который думает над `--version` дольше,
+    сайдбару всё равно не годится, а держать на нём ответ страницы нельзя.
+
+    stdin=DEVNULL не для красоты: у Codex на открытой трубе — а из-под Flask
+    она именно открытая — команда ждёт EOF без конца. Наследие разведки
+    2 сентября, где так зависли два прогона по семь и десять минут.
+
+    subprocess только списком аргументов — правило среза 1, здесь тоже."""
+    try:
+        done = subprocess.run([command, "--version"], capture_output=True,
+                              text=True, timeout=5,
+                              stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        # Чаще всего это FileNotFoundError: команды нет в PATH. Это не
+        # поломка бота, а ответ на вопрос «что установлено».
+        return ""
+    if done.returncode != 0:
+        return ""
+    first = done.stdout.strip().splitlines()
+    return first[0].strip() if first else ""
+
+
 def seed_categories():
     """Справочник для запуска из терминала.
 
@@ -105,6 +158,11 @@ def seed_categories():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--что-стоит":
+        for key, version in versions(fresh=True).items():
+            print(f"{TITLES[key]}: {version or 'не установлен'}")
+        sys.exit()
+
     if len(sys.argv) < 2:
         sys.exit(
             'Как звать:\n'
