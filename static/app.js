@@ -264,6 +264,66 @@
     });
   });
 
+  /* Файлы уходят по одному: в очереди разбора всё равно один за другим, а
+     отдельным заданием каждый получает свою плашку и свою строку в ленте. */
+  function sendFiles(list) {
+    Array.prototype.forEach.call(list, function (file) {
+      var form = new FormData();
+      form.append("file", file, file.name);
+      send(form);
+    });
+  }
+
+  /* Браузер шлёт dragleave и на переходе между вложенными элементами, поэтому
+     считаем входы и выходы, а не гасим подсветку на первом же dragleave —
+     иначе рамка мигает, пока ведёшь файл через окно. */
+  var dragDepth = 0;
+
+  function dragging(on) {
+    app.classList.toggle("dragging", on);
+  }
+
+  document.addEventListener("dragenter", function (event) {
+    event.preventDefault();
+    dragDepth += 1;
+    dragging(true);
+  });
+
+  document.addEventListener("dragover", function (event) {
+    event.preventDefault();
+  });
+
+  document.addEventListener("dragleave", function (event) {
+    event.preventDefault();
+    dragDepth -= 1;
+    if (dragDepth <= 0) { dragDepth = 0; dragging(false); }
+  });
+
+  /* Без этого браузер откроет фотографию во всю вкладку вместо того, чтобы
+     отдать её боту. */
+  document.addEventListener("drop", function (event) {
+    event.preventDefault();
+    dragDepth = 0;
+    dragging(false);
+    if (event.dataTransfer && event.dataTransfer.files.length) {
+      sendFiles(event.dataTransfer.files);
+    }
+  });
+
+  /* Перетащить можно не всегда: чек бывает в телефоне, а окно на другом
+     экране. Кнопка «+» открывает обычный выбор файла — оба поля ввода
+     зовут одно и то же скрытое поле. */
+  var pick = document.getElementById("pick");
+
+  document.querySelectorAll(".box .add").forEach(function (button) {
+    button.addEventListener("click", function () { pick.click(); });
+  });
+
+  pick.addEventListener("change", function () {
+    if (pick.files.length) sendFiles(pick.files);
+    pick.value = "";   /* иначе тот же файл второй раз не выберется */
+  });
+
   poll();
   setInterval(poll, 3000);
 })();
