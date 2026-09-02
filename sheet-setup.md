@@ -12,7 +12,7 @@ Google Cloud, сервисный аккаунт и файл с ключами н
 **Быстрый путь — готовый шаблон.** Откройте ссылку, и Google предложит создать
 копию таблицы себе на диск:
 
-https://docs.google.com/spreadsheets/d/1in1MKkVs8JtqnRqCDbyD5eXVj0z1JMRpj-UGOROT7v4/copy
+https://docs.google.com/spreadsheets/d/1sIv-QdUNeVvViB2xVE2owCs4D3dSBn7ZUjAZRTTuHD0/copy
 
 В копии уже есть оба листа с точными именами, одиннадцать заголовков в нужном
 порядке, справочник из шестнадцати статей и оформление: выпадающие списки в
