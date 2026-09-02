@@ -152,6 +152,117 @@
 
   loadScript();
 
+  /* ═════════ Готово и третий, необязательный шаг ═════════ */
+
+  /* Строка сводки. Тот же вид, что в карточках сайдбара. */
+  function line(key, value) {
+    var row = document.createElement("div");
+    row.className = "row";
+    var left = document.createElement("span");
+    left.className = "k";
+    left.textContent = key;
+    var right = document.createElement("span");
+    right.className = "v";
+    right.textContent = value;
+    row.appendChild(left);
+    row.appendChild(right);
+    return row;
+  }
+
+  /* Сводка на экране готовности. Числа берутся у сервера, а не запоминаются
+     по дороге: человек мог поправить таблицу в соседней вкладке, и сводка,
+     собранная из ответов десятиминутной давности, соврала бы. */
+  function drawSummary(id) {
+    fetch("/api/summary")
+      .then(function (response) { return response.json(); })
+      .then(function (answer) {
+        var state = answer.state;
+        var card = document.getElementById(id);
+        card.textContent = "";
+        card.appendChild(line("Движок", state.engine));
+        card.appendChild(line("Таблица", state.categories + " статей"));
+        card.appendChild(line("Телеграм", state.telegram
+          ? "@" + state.bot : "не подключён"));
+        if (state.owner) card.appendChild(line("Может писать", state.owner));
+      })
+      .catch(function () {});
+  }
+
+  document.getElementById("w-sheet-next")
+    .addEventListener("click", function () { drawSummary("w-summary"); });
+
+  document.getElementById("w-tg-start").addEventListener("click", function () {
+    go("s-token");
+  });
+
+  document.getElementById("w-token-check").addEventListener("click", function () {
+    var token = document.getElementById("token").value.trim();
+    verdict("w-token-said", "Спрашиваю телеграм…");
+    ask("/api/telegram/check", {token: token}).then(function (answer) {
+      verdict("w-token-said", answer.ok
+        ? "Токен принят. Бота зовут @" + answer.username + " — это он?"
+        : answer.error);
+      document.getElementById("w-token-go").disabled = !answer.ok;
+    });
+  });
+
+  document.getElementById("w-token-go").addEventListener("click", function () {
+    var token = document.getElementById("token").value.trim();
+    /* Сохраняем тем же маршрутом, которым бота меняет сайдбар. Он же
+       перезапустит опрос: без работающего опроса следующий экран ждал бы
+       сообщения, которого никто не читает. */
+    ask("/api/telegram/save", {token: token}).then(function (answer) {
+      if (!answer.ok) { verdict("w-token-said", answer.error); return; }
+      document.getElementById("w-bot-name").textContent = "@" + answer.username;
+      go("s-wait");
+    });
+  });
+
+  /* Кого человек уже отверг на «Это вы?». Без этого списка «Нет, ждём дальше»
+     возвращало бы на тот же экран через две секунды: опрос увидел бы того же
+     стучавшегося и снова счёл бы его первым. */
+  var notMe = {};
+
+  document.getElementById("w-hello-no").addEventListener("click", function () {
+    notMe[document.getElementById("w-hello-yes").dataset.id] = true;
+  });
+
+  /* Ждём, пока человек напишет своему боту. Вводить сюда ничего не нужно:
+     числовой идентификатор приедет сам, и человек его не увидит никогда.
+
+     Проверка на скрытый экран заменяет собой остановку таймера: экранов
+     мало, опрос дешёвый, а забытый clearInterval — обычный способ получить
+     переход на чужом экране. */
+  setInterval(function () {
+    if (document.getElementById("s-wait").hidden) return;
+    fetch("/api/summary")
+      .then(function (response) { return response.json(); })
+      .then(function (answer) {
+        var knocked = (answer.state.knocked || []).filter(function (person) {
+          return !notMe[person.id];
+        });
+        if (!knocked.length) return;
+        var first = knocked[0];
+        var card = document.getElementById("w-knocker");
+        card.textContent = "";
+        card.appendChild(line(first.name || "без имени",
+          first.username ? "@" + first.username : "ника нет"));
+        verdict("w-hello-said", "Это вы, " +
+          (first.username ? "@" + first.username : first.name) + "?");
+        document.getElementById("w-hello-yes").dataset.id = first.id;
+        go("s-hello");
+      })
+      .catch(function () {});
+  }, 2000);
+
+  document.getElementById("w-hello-yes").addEventListener("click", function () {
+    var id = document.getElementById("w-hello-yes").dataset.id;
+    ask("/api/people/allow", {id: id}).then(function () {
+      drawSummary("w-summary2");
+      go("s-tgdone");
+    });
+  });
+
   /* Копирование без внешних библиотек: современный буфер обмена, а если страница
      открыта по file:// и он недоступен — старый способ через выделение. */
   document.querySelectorAll(".copy").forEach(function (btn) {

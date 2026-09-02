@@ -101,6 +101,15 @@ def create(env, st, jobs, blocked=""):
         return jsonify(events=fresh, last=last, life=feed.LIFE,
                        state=snapshot(env, st, blocked))
 
+    @app.get("/api/summary")
+    def summary():
+        """Состояние для мастера: тот же снимок, что едет в сайдбар.
+
+        Отдельный маршрут, а не /api/events, потому что мастеру не нужна
+        лента: событий у него нет и быть не может, а таскать их ради трёх
+        строк сводки незачем."""
+        return jsonify(state=snapshot(env, st, blocked))
+
     @app.get("/api/engines")
     def engines():
         """Что установлено. Отдельно от снимка состояния, потому что кнопка
@@ -227,6 +236,12 @@ def create(env, st, jobs, blocked=""):
             "username": found[0].get("username", ""),
             "name": found[0].get("name", ""),
         }]
+        # Первый впущенный — почти всегда сам хозяин: он завёл бота минуту
+        # назад и написал ему сам. Имя нужно колонке «кто прислал» и
+        # приветствию; спрашивать его отдельной формой значит задать вопрос,
+        # ответ на который только что приехал.
+        if not (settings.get("owner") or "").strip():
+            settings["owner"] = found[0].get("name", "") or ""
         config.save_settings(settings)
         return jsonify(ok=True, state=snapshot(env, st, blocked))
 

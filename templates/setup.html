@@ -214,11 +214,7 @@
          и бросьте в окно фотографию чека — через полминуты в таблице появится строка.</p>
 
       <div class="grp">
-        <div class="card">
-          <div class="row"><span class="k">Движок</span><span class="v">Claude Code 2.1.232</span></div>
-          <div class="row"><span class="k">Таблица</span><span class="v">16 статей</span></div>
-          <div class="row"><span class="k">Телеграм</span><span class="v noname">не подключён</span></div>
-        </div>
+        <div class="card" id="w-summary"></div>
       </div>
 
       <div class="grp">
@@ -228,7 +224,7 @@
             Телеграм нужен, чтобы слать чеки с телефона и пускать коллег. Без него рабочее
             место работает полностью — подключить можно когда угодно, из раздела «Телеграм».
           </p>
-          <button class="bt" type="button" data-go="s-token">
+          <button class="bt" type="button" id="w-tg-start">
             Подключить телеграм
           </button>
         </div>
@@ -257,13 +253,13 @@
                    placeholder="8123456789:AAHf-kL2m7nQ...">
           </div>
           <div class="bts">
-            <button class="bt" type="button">Проверить токен</button>
+            <button class="bt" type="button" id="w-token-check">Проверить токен</button>
           </div>
         </div>
 
-        <div class="verdict">
+        <div class="verdict" id="w-token-said" hidden>
           <svg class="mark"><use href="#mark"/></svg>
-          <span>Токен принят. Бота зовут <b>@leo_cheki_bot</b> — это он?</span>
+          <span></span>
         </div>
 
         <p class="note">Строка никуда, кроме вашего компьютера, не уходит: рабочее место
@@ -273,7 +269,7 @@
 
       <div class="nav">
         <button class="bt big" type="button" data-go="s-done">Назад</button>
-        <button class="bt go big grow" type="button" data-go="s-wait">Да, это он</button>
+        <button class="bt go big grow" type="button" id="w-token-go" disabled>Да, это он</button>
       </div>
     </section>
 
@@ -283,7 +279,7 @@
       <div class="steps"><span>Необязательно · Телеграм</span></div>
 
       <h1>Напишите своему боту</h1>
-      <p class="lede">Откройте в телеграме <b>@leo_cheki_bot</b> и отправьте что угодно —
+      <p class="lede">Откройте в телеграме <b id="w-bot-name"></b> и отправьте что угодно —
          хоть «привет». Вводить сюда ничего не нужно: мы узнаем вас сами.</p>
 
       <div class="grp">
@@ -309,22 +305,20 @@
       <p class="lede">Пришло сообщение. Если это вы — впустите себя, и телеграм подключён.</p>
 
       <div class="grp">
-        <div class="card">
-          <div class="row">
-            <span class="k">Леонид Годник</span>
-            <span class="v nick">@leogodnik</span>
-            <span class="stamp">только что</span>
-          </div>
-        </div>
+        <div class="card" id="w-knocker"></div>
 
-        <div class="verdict">
+        <div class="verdict" id="w-hello-said" hidden>
           <svg class="mark"><use href="#mark"/></svg>
-          <span>Это вы, <b>@leogodnik</b>?</span>
+          <span></span>
         </div>
 
+        <!-- У «Да, это я» нет data-go: экран меняется после того, как сервер
+             впустил человека. У «Нет» data-go остаётся — переход чистый, но id
+             ему нужен: без него опрос вернул бы того же стучавшегося обратно
+             через две секунды. -->
         <div class="bts spaced">
-          <button class="bt go" type="button" data-go="s-tgdone">Да, это я</button>
-          <button class="bt" type="button" data-go="s-wait">Нет, ждём дальше</button>
+          <button class="bt go" type="button" id="w-hello-yes">Да, это я</button>
+          <button class="bt" type="button" id="w-hello-no" data-go="s-wait">Нет, ждём дальше</button>
         </div>
 
         <p class="note">Числовой идентификатор бот запомнит сам и запишет в
@@ -343,13 +337,8 @@
          ленте, с пометкой, кто прислал.</p>
 
       <div class="grp">
-        <div class="card">
-          <div class="row"><span class="k">Движок</span><span class="v">Claude Code 2.1.232</span></div>
-          <div class="row"><span class="k">Таблица</span><span class="v">16 статей</span></div>
-          <div class="row"><span class="k">Телеграм</span><span class="v nick">@leo_cheki_bot</span></div>
-          <div class="row"><span class="k">Может писать</span><span class="v nick">@leogodnik</span></div>
-        </div>
-        <p class="note">Пустить кого-то ещё можно в разделе «Кто может писать»: человек пишет
+        <div class="card" id="w-summary2"></div>
+        <p class="note">Пустить кого-то ещё можно в разделе «Доступ»: человек пишет
            боту, появляется в списке стучавшихся, вы нажимаете «Впустить».</p>
       </div>
 
