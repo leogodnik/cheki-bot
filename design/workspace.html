@@ -47,12 +47,19 @@
   .scroll { flex: 1; overflow-y: auto; margin: 0 -12px; padding: 0 12px; }
 
   .ft { border-top: 1px solid var(--line); margin: 0 -12px; padding: 11px 16px;
-        display: flex; align-items: center; gap: 10px; }
-  .ft a { display: flex; align-items: center; gap: 10px; color: inherit;
-          text-decoration: none; border-radius: 7px; }
-  .ft .who { font-size: 13.5px; line-height: 1.3; }
-  .ft .who i { display: block; font-style: normal; color: var(--dim); font-size: 11.5px; }
+        display: flex; flex-direction: column; gap: 4px; }
+  .ft .me { display: flex; align-items: center; gap: 10px; }
+  .ft .who { font-size: 13.5px; line-height: 1.3;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ft .rt { margin-left: auto; display: flex; gap: 13px; color: var(--mid); }
+  /* Канал курса — не хозяин бота, а авторство: строкой ниже, мельче и
+     приглушённо. Иконка мельче обычных 17px, отступ добирает разницу,
+     чтобы текст встал вровень с именем владельца. */
+  .ft a { display: flex; align-items: center; gap: 10px;
+          color: var(--dim); font-size: 11.5px; line-height: 1.3;
+          text-decoration: none; }
+  .ft a:hover { color: var(--hot); }
+  .ft a .ic { width: 14px; height: 14px; margin-left: 3px; }
 
   /* ── основное поле ── */
   .mn { display: flex; flex-direction: column; padding: 0 40px; overflow: hidden; }
@@ -109,6 +116,7 @@
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
   <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 20v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
   <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
   <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
   <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
@@ -141,12 +149,17 @@
       <div class="li"><span class="bl"></span><span class="nm">Обед с клиентом</span><span class="am">2 400,00</span></div>
     </div>
 
+    <!-- Слот пользователя показывает владельца бота — имя из settings.json,
+         ключ "owner". Не задано — «Владелец не указан». -->
     <div class="ft">
+      <div class="me">
+        <svg class="ic"><use href="#i-user"/></svg>
+        <span class="who">Леонид</span>
+        <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
+      </div>
       <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
-        <svg class="ic"><use href="#i-tg"/></svg>
-        <span class="who">@financialpostpunk<i>Леонид Годник</i></span>
+        <svg class="ic"><use href="#i-tg"/></svg>Курс: @financialpostpunk
       </a>
-      <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
     </div>
   </aside>
 
@@ -182,12 +195,17 @@
       <div class="li"><span class="bl"></span><span class="nm">Такси · Мария</span><span class="am">450,00</span></div>
       <div class="li"><span class="bl chk"></span><span class="nm">АЗС Лукойл</span><span class="am">—</span></div>
     </div>
+    <!-- Слот пользователя показывает владельца бота — имя из settings.json,
+         ключ "owner". Не задано — «Владелец не указан». -->
     <div class="ft">
+      <div class="me">
+        <svg class="ic"><use href="#i-user"/></svg>
+        <span class="who">Леонид</span>
+        <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
+      </div>
       <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
-        <svg class="ic"><use href="#i-tg"/></svg>
-        <span class="who">@financialpostpunk<i>Леонид Годник</i></span>
+        <svg class="ic"><use href="#i-tg"/></svg>Курс: @financialpostpunk
       </a>
-      <span class="rt"><svg class="ic"><use href="#i-search"/></svg><svg class="ic"><use href="#i-panel"/></svg></span>
     </div>
   </aside>
 
