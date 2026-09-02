@@ -33,7 +33,14 @@ _WRITE_LOCK = threading.Lock()
 REQUIRED_ENV = ("SHEET_URL", "SHEET_SECRET")
 
 # Пустой белый список — безопасное состояние: бот не отвечает никому.
-DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": ""}
+#
+# Ник подключённого бота лежит здесь, а не в state.json, по тому же признаку,
+# по какому разведены эти два файла: удаление state.json не должно ничего
+# значить для человека, а «как зовут моего бота» — значит. Спрашивать getMe
+# на каждом опросе ради этой строки было бы платой в сеть за то, что меняется
+# раз в год.
+DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": "",
+            "bot": ""}
 
 
 def load_env():

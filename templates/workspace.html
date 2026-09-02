@@ -26,9 +26,9 @@
   Разделы сайдбара подменяют ленту, а не открываются модальными окнами — как в
   приложении Claude, где раздел занимает всё поле. «Новый расход» возвращает ленту.
 
-  Здесь пустой скелет: всё содержимое ленты и записей сайдбара наполняет
-  /static/app.js, опрашивая /api/events раз в три секунды. Выдуманные данные
-  остались только в панели «Телеграм» — она оживёт дальше в том же срезе 4.
+  Здесь пустой скелет: всё содержимое ленты и всех разделов сайдбара наполняет
+  /static/app.js, опрашивая /api/events раз в три секунды. Выдуманных данных в
+  файле не осталось: каждая строка на экране приехала из снимка состояния.
 -->
 
 <svg style="display:none" aria-hidden="true">
@@ -184,41 +184,49 @@
         <p class="lede">Нужен, чтобы слать чеки с телефона и пускать коллег. Без него
            рабочее место работает полностью — телеграм необязателен.</p>
 
-        <div class="card">
-          <div class="row">
-            <span class="k">Подключён</span>
-            <span class="v nick">@leo_cheki_bot</span>
-            <span class="stamp">опрос идёт</span>
-          </div>
-          <div class="row">
-            <span class="k">Владелец</span>
-            <span class="v nick">@leogodnik</span>
-          </div>
-        </div>
+        <div class="card" id="tg-facts"></div>
 
         <div class="grp bts">
-          <button class="bt" type="button" aria-expanded="true">Заменить бота</button>
-          <button class="bt" type="button">Отключить телеграм</button>
+          <button class="bt" type="button" id="tg-open">Подключить бота</button>
+          <button class="bt" type="button" id="tg-off" hidden>Отключить телеграм</button>
         </div>
 
-        <h2>Заменить бота</h2>
-        <div class="card plain">
-          <div class="field">
-            <label for="newtok">Токен нового бота от @BotFather</label>
-            <input class="fin" id="newtok" type="text" autocomplete="off" spellcheck="false" placeholder="8123456789:AAHf-kL2m7nQ...">
+        <div id="tg-form" hidden>
+          <h2 id="tg-form-head">Токен бота</h2>
+          <div class="card plain">
+            <div class="field">
+              <label for="newtok">Строка от @BotFather</label>
+              <input class="fin" id="newtok" type="text" autocomplete="off"
+                     spellcheck="false" placeholder="8123456789:AAHf-kL2m7nQ...">
+            </div>
+
+            <!-- Три следствия показываются до подтверждения, а не после.
+                 При первом подключении их нет: терять там нечего. -->
+            <div id="tg-conseq" hidden>
+              <p class="note">Что при этом произойдёт:</p>
+              <ul class="conseq">
+                <li>Список пишущих <b>сохранится</b> — телеграм опознаёт человека
+                    одним номером у всех ботов.</li>
+                <li>Неразобранные сообщения <b>потеряются</b>: у нового бота своя
+                    очередь.</li>
+                <li>Опрос <b>перезапустится сам</b>, сбросив offset — он у каждого
+                    бота свой. Останавливать ничего не надо.</li>
+              </ul>
+            </div>
+
+            <div class="bts spaced">
+              <button class="bt go" type="button" id="tg-save">Подключить</button>
+              <button class="bt" type="button" id="tg-cancel">Отмена</button>
+            </div>
           </div>
-          <p class="note">Что при этом произойдёт:</p>
-          <ul class="conseq">
-            <li>Список пишущих <b>сохранится</b> — телеграм опознаёт человека одним номером
-                у всех ботов.</li>
-            <li>Неразобранные сообщения <b>потеряются</b>: у нового бота своя очередь.</li>
-            <li>Опрос <b>перезапустится сам</b>, сбросив offset — он у каждого бота свой.
-                Останавливать ничего не надо.</li>
-          </ul>
-          <div class="bts spaced">
-            <button class="bt go" type="button">Заменить</button>
-            <button class="bt" type="button">Отмена</button>
+
+          <div class="verdict" id="tg-said" hidden>
+            <svg class="mark"><use href="#mark"/></svg><span></span>
           </div>
+
+          <p class="note">Строка никуда, кроме вашего компьютера, не уходит:
+             рабочее место живёт на 127.0.0.1 и пишет токен в файл
+             <code class="inline">.env</code> рядом с ботом.</p>
         </div>
       </div></div>
     </section>

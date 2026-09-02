@@ -19,6 +19,8 @@ import agent
 import config
 import feed
 import intake
+import state as memory
+import telegram
 
 FIRST_PORT = 8765
 LAST_PORT = 8775
@@ -165,6 +167,66 @@ def create(env, st, jobs, blocked=""):
         config.save_settings(settings)
         return jsonify(ok=True, state=snapshot(env, st, blocked))
 
+    @app.post("/api/telegram/check")
+    def telegram_check():
+        """Спросить у телеграма, чей это токен. Ничего не сохраняем.
+
+        Проверка отдельно от сохранения потому, что человеку показывают имя
+        бота и спрашивают «это он?». Половина ошибок с токеном — вставили не
+        ту строку, и увидеть это надо до того, как опрос уедет не туда."""
+        token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+        if not token:
+            return jsonify(ok=False,
+                           error="Пустая строка. Вставьте токен от @BotFather — "
+                                 "длинную строку с двоеточием посередине.")
+        try:
+            username = telegram.check_token(token)
+        except Exception as error:
+            # Ловим широко нарочно: сюда приезжает и отказ телеграма, и
+            # оборванная сеть, и мусор вместо JSON. Человеку во всех трёх
+            # случаях нужно одно и то же — что строка не подошла.
+            return jsonify(ok=False, error=f"Телеграм не принял этот токен: {error}")
+        return jsonify(ok=True, username=username)
+
+    @app.post("/api/telegram/save")
+    def telegram_save():
+        """Подключить бота или заменить его.
+
+        offset сбрасывается здесь, а не в опросе, и это главное в маршруте:
+        у каждого бота своя нумерация обновлений. Оставить чужой номер значит
+        либо получить отказ, либо — хуже — тишину, в которой бот выглядит
+        подключённым и не отвечает."""
+        token = ((request.get_json(silent=True) or {}).get("token") or "").strip()
+        try:
+            username = telegram.check_token(token)
+        except Exception as error:
+            return jsonify(ok=False, error=f"Телеграм не принял этот токен: {error}")
+
+        config.save_env({"BOT_TOKEN": token})
+        config.refresh_env(env)
+
+        settings = config.load_settings()
+        settings["bot"] = username
+        config.save_settings(settings)
+
+        st["offset"] = 0
+        memory.save(st)
+        return jsonify(ok=True, username=username,
+                       state=snapshot(env, st, blocked))
+
+    @app.post("/api/telegram/off")
+    def telegram_off():
+        """Отключить телеграм. Белый список остаётся нетронутым.
+
+        Телеграм опознаёт человека одним номером у всех ботов, и стирать
+        список при отключении значило бы наказать хозяина за передумывание.
+        Рабочее место без телеграма работает полностью."""
+        config.save_env({"BOT_TOKEN": ""})
+        config.refresh_env(env)
+        st["offset"] = 0
+        memory.save(st)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
     return app
 
 
@@ -189,6 +251,7 @@ def snapshot(env, st, blocked):
         "allowed": settings.get("allowed", []),
         "knocked": settings.get("knocked", []),
         "telegram": bool(env["bot_token"]),
+        "bot": (settings.get("bot") or "").strip(),
         "blocked": blocked,
     }
 

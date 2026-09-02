@@ -16,22 +16,7 @@ import feed
 import intake
 import state as memory
 import web
-
-API = "https://api.telegram.org/bot{token}/{method}"
-POLL_SECONDS = 30
-
-
-def call(token, method, **params):
-    """Один вызов Bot API. Ждём чуть дольше, чем длится долгий опрос."""
-    response = requests.post(
-        API.format(token=token, method=method), json=params,
-        timeout=POLL_SECONDS + 35,
-    )
-    response.raise_for_status()
-    answer = response.json()
-    if not answer.get("ok"):
-        raise RuntimeError(answer.get("description", "телеграм ответил не ok"))
-    return answer["result"]
+from telegram import POLL_SECONDS, call
 
 
 def get_updates(token, offset):
@@ -242,16 +227,42 @@ def worker(env, st, jobs):
 
 
 def telegram_loop(env, st, jobs):
-    """Опрос телеграма. Своим потоком, потому что главный занят страницей."""
-    print("Телеграм: жду сообщений.")
+    """Надзор за опросом. Живёт всё время работы бота, даже когда токена нет.
+
+    Поток стартует всегда, в том числе с пустым .env: токен может появиться
+    через минуту — из мастера или из сайдбара, — и человек не должен ради
+    этого перезапускать бота.
+
+    Две секунды сна вместо тридцати не расточительство: пустая проверка стоит
+    одно сравнение строк, а полминуты ожидания после нажатия «Подключить»
+    человек прочтёт как поломку."""
+    while True:
+        token = env["bot_token"]
+        if not token:
+            time.sleep(2)
+            continue
+        print("Телеграм: жду сообщений.")
+        poll_with(env, st, jobs, token)
+        print("Телеграм: опрос остановлен — бота заменили или отключили.")
+
+
+def poll_with(env, st, jobs, token):
+    """Опрос телеграма одним конкретным токеном. Своим потоком, потому что
+    главный занят страницей."""
     while True:
         try:
-            updates = get_updates(env["bot_token"], st["offset"])
+            updates = get_updates(token, st["offset"])
         except (requests.RequestException, RuntimeError, ValueError) as error:
             # Телеграм не отвечает — ждём и повторяем, offset не двигаем.
             print(f"телеграм не отвечает ({error}), жду пять секунд")
             time.sleep(5)
             continue
+        # Пока висел долгий опрос, бота могли заменить. Эти обновления от
+        # прежнего бота, и двигать по ним offset нового нельзя: у каждого бота
+        # своя нумерация, и чужой номер новый бот либо не поймёт, либо поймёт
+        # неправильно и промолчит.
+        if env["bot_token"] != token:
+            return
         for update in updates:
             st["offset"] = update["update_id"] + 1
             message = update.get("message")
@@ -280,12 +291,14 @@ def main():
         print()
     else:
         threading.Thread(target=worker, args=(env, st, jobs), daemon=True).start()
-        if env["bot_token"]:
-            threading.Thread(target=telegram_loop, args=(env, st, jobs),
-                             daemon=True).start()
-        else:
+        # Поток заводится всегда, даже без токена: решает уже надзор внутри.
+        # Токен может появиться через минуту — из сайдбара или из мастера, — и
+        # перезапускать ради этого бота человек не должен.
+        threading.Thread(target=telegram_loop, args=(env, st, jobs),
+                         daemon=True).start()
+        if not env["bot_token"]:
             # Это не поломка, а обычный способ работать: чеки принимает
-            # браузер. Телеграм подключается в срезе 5, кнопкой.
+            # браузер. Телеграм подключается кнопкой в сайдбаре.
             print("Телеграм не подключён — работаем через браузер.")
 
     web.quiet()
