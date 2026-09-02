@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чеки — рабочее место</title>
+<link rel="stylesheet" href="../static/style.css">
+</head>
+<body class="fixed">
+
+<!--
+  РАБОЧЕЕ МЕСТО. Второй клиент бота наравне с телеграмом: сюда перетаскивают чеки,
+  пишут траты и видят ленту всего, что бот сделал.
+
+  Разделы сайдбара подменяют ленту, а не открываются модальными окнами — как в
+  приложении Claude, где раздел занимает всё поле. «Новый расход» возвращает ленту.
+
+  Данные выдуманные, логики нет. Переключение состояний — инлайновым скриптом внизу,
+  без единого внешнего запроса.
+-->
+
+<svg style="display:none" aria-hidden="true">
+  <!-- знак: кассовая лента с оторванным низом. Свой, не звёздочка Anthropic:
+       это чужой товарный знак, а код уезжает ученикам через GitHub. -->
+  <symbol id="mark" viewBox="0 0 24 24">
+    <path fill="#C4714F" d="M4.6 3.2h14.8v16.1l-2.47-1.72-2.46 1.72-2.47-1.72-2.46 1.72-2.47-1.72L4.6 19.3z"/>
+    <path stroke="#FAF9F5" stroke-width="1.5" stroke-linecap="round" fill="none" d="M8 7.7h8M8 11.2h5"/>
+  </symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 10v10"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 20v-2a4 4 0 00-3-3.9"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="M21 12l-8.5 8.5a5 5 0 01-7-7L14 5a3.3 3.3 0 015 4.6l-8.5 8.5a1.7 1.7 0 01-2.4-2.4L15 9"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-tg" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M21.5 3.5L2.8 10.6l5.4 1.9 1.9 5.6 3-3.6 4.7 3.4z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+</svg>
+
+<div class="app" id="app">
+
+  <!-- ═════════════ сайдбар ═════════════ -->
+
+  <aside class="sd" id="sd">
+    <div class="wm"><svg class="mark"><use href="#mark"/></svg><b>Чеки</b></div>
+
+    <button class="nv" type="button" data-pane="feed" aria-current="true">
+      <svg class="ic"><use href="#i-plus"/></svg>Новый расход
+    </button>
+
+    <!-- Таблица не подменяет ленту: она открывает саму таблицу в новой вкладке. -->
+    <a class="nv" href="https://docs.google.com/spreadsheets/d/1cheki-primer/edit" target="_blank" rel="noopener">
+      <svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r">16 статей</span>
+    </a>
+
+    <button class="nv" type="button" data-pane="people">
+      <svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r">2</span>
+    </button>
+
+    <button class="nv" type="button" data-pane="telegram">
+      <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot" title="подключён"></span>
+    </button>
+
+    <button class="nv" type="button" data-pane="engine">
+      <svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r">Claude Code</span>
+    </button>
+
+    <div class="hd">Записи сегодня<svg class="ic"><use href="#i-sliders"/></svg></div>
+
+    <div class="scroll">
+      <div id="today">
+        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Пятёрочка</span><span class="am">1 040,00</span></button>
+        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Такси · Мария</span><span class="am">450,00</span></button>
+        <button class="li" type="button" data-pane="feed"><span class="bl chk"></span><span class="nm">АЗС Лукойл</span><span class="am">—</span></button>
+        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Комус, канцелярия</span><span class="am">4 780,00</span></button>
+        <button class="li" type="button" data-pane="feed"><span class="bl"></span><span class="nm">Обед с клиентом</span><span class="am">2 400,00</span></button>
+      </div>
+
+      <!-- Первый запуск: приглашение, а не пустота. -->
+      <p class="li-none" id="today-none" hidden>
+        Пока пусто. Перетащите чек в окно справа — он появится здесь и в таблице.
+      </p>
+    </div>
+
+    <div class="ft">
+      <a href="https://t.me/financialpostpunk" target="_blank" rel="noopener">
+        <svg class="ic"><use href="#i-tg"/></svg>
+        <span class="who">@financialpostpunk<i>Леонид Годник</i></span>
+      </a>
+      <span class="rt">
+        <button type="button" title="Поиск"><svg class="ic"><use href="#i-search"/></svg></button>
+        <button type="button" title="Свернуть сайдбар"><svg class="ic"><use href="#i-panel"/></svg></button>
+      </span>
+    </div>
+  </aside>
+
+  <!-- ═════════════ основное поле ═════════════ -->
+
+  <main class="mn">
+
+    <div class="topbar">
+      <svg class="mark"><use href="#mark"/></svg><b>Чеки</b>
+      <button class="burger" type="button" id="burger" aria-label="Меню" aria-expanded="false">
+        <svg class="ic"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+
+    <!-- ─────── лента ─────── -->
+
+    <section class="pane" id="p-feed">
+      <div class="flow">
+        <div class="col">
+
+          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>чек-пятёрочка.jpg</span></div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Пятёрочка · 1 004,70 ₽</b></div>
+            <div class="sub">продукты · картой · 20 августа — <em>строка 47</em></div>
+          </div>
+
+          <div class="u">не 1004, а 1040</div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Поправил сумму: 1 004,70 → 1 040,00</b></div>
+            <div class="sub">Пятёрочка · продукты · картой — <em>строка 47</em></div>
+          </div>
+
+          <div class="b">
+            <div class="src">из телеграма · Мария</div>
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Такси · 450,00 ₽</b></div>
+            <div class="sub">транспорт и такси · наличными — <em>строка 48</em></div>
+          </div>
+
+          <div class="u">не 450, а 480</div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Строку 48 записала Мария из телеграма — не трогаю.</b></div>
+            <div class="sub">здесь правится только то, что записано отсюда</div>
+          </div>
+
+          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>чек-пятёрочка.jpg</span></div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Этот чек уже записан — <em>строка 47</em></b></div>
+            <div class="sub">такой же файл приходил сегодня в 11:20</div>
+          </div>
+
+          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>заправка.jpg</span></div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>АЗС Лукойл · 21 августа</b></div>
+            <div class="sub"><span class="warn">итог срезан, сумму впишите сами</span> — <em>строка 49, на проверку</em></div>
+          </div>
+
+          <div class="b">
+            <div class="src">из телеграма · Мария</div>
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Голосовые не умею.</b></div>
+            <div class="sub">напишите текстом или пришлите фото чека</div>
+          </div>
+
+          <div class="u">не 4780, а 4800</div>
+          <div class="b">
+            <div class="hdr"><svg class="mark"><use href="#mark"/></svg><b>Строка изменилась — поправьте в таблице руками.</b></div>
+            <div class="sub">в строке 50 сейчас не «Комус» на 4 780,00, а что-то другое: похоже,
+              строки в таблице сдвинули</div>
+          </div>
+
+          <div class="u"><span class="att"><svg class="ic"><use href="#i-clip"/></svg>кофейня.jpg</span></div>
+          <div class="b"><div class="hdr"><svg class="mark"><use href="#mark"/></svg>
+            <span class="run">Смотрю чек… <small>15–50 сек</small></span></div></div>
+
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="box">
+          <label class="sr" for="say" hidden>Новый расход</label>
+          <textarea class="in" id="say" rows="1" placeholder="Перетащите чек или напишите тратой"></textarea>
+          <div class="bar">
+            <button class="add" type="button" title="Прикрепить чек"><svg class="ic"><use href="#i-plus"/></svg></button>
+            <button class="rt" type="button">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────── пустое начало ─────── -->
+
+    <section class="pane" id="p-empty" hidden>
+      <div class="hero">
+        <div class="greet"><svg class="mark"><use href="#mark"/></svg><h1>Что записываем, Леонид?</h1></div>
+        <div class="box">
+          <label for="say2" hidden>Новый расход</label>
+          <textarea class="in" id="say2" rows="1" placeholder="Перетащите чек или напишите тратой"></textarea>
+          <div class="bar">
+            <button class="add" type="button" title="Прикрепить чек"><svg class="ic"><use href="#i-plus"/></svg></button>
+            <button class="rt" type="button">Claude Code <i>sonnet</i><svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+        </div>
+        <div class="drophint">Фотографию чека можно просто перетащить в окно</div>
+      </div>
+    </section>
+
+    <!-- ─────── кто может писать ─────── -->
+
+    <section class="pane" id="p-people" hidden>
+      <div class="sheet"><div class="col">
+        <h1>Кто может писать</h1>
+        <p class="lede">Из браузера пишете вы один — он на вашем компьютере. Список нужен
+           телеграму: бот отвечает только тем, кто здесь есть.</p>
+
+        <div class="card">
+          <div class="row"><span class="k">Леонид Годник</span><span class="v nick">@leogodnik</span><button class="bt" type="button">Убрать</button></div>
+          <div class="row"><span class="k">Ольга Кузнецова</span><span class="v noname">ника нет</span><button class="bt" type="button">Убрать</button></div>
+          <div class="sec-h">Стучались, но не впущены</div>
+          <div class="row"><span class="k">Иван Соколов</span><span class="nick">@sokolov_i</span><span class="v stamp">вчера, 14:20</span><button class="bt go" type="button">Впустить</button></div>
+          <div class="row"><span class="k">Мария П.</span><span class="noname">ника нет</span><span class="v stamp">сегодня, 09:41</span><button class="bt go" type="button">Впустить</button></div>
+        </div>
+
+        <p class="note">Ник в телеграме заводить необязательно: есть — показываем его, нет —
+           имя из профиля и пометку. Числовой идентификатор не показываем никогда, хотя
+           работает бот именно по нему.</p>
+      </div></div>
+    </section>
+
+    <!-- ─────── телеграм ─────── -->
+
+    <section class="pane" id="p-telegram" hidden>
+      <div class="sheet"><div class="col">
+        <h1>Телеграм</h1>
+        <p class="lede">Нужен, чтобы слать чеки с телефона и пускать коллег. Без него
+           рабочее место работает полностью — телеграм необязателен.</p>
+
+        <div class="card">
+          <div class="row">
+            <span class="k">Подключён</span>
+            <span class="v nick">@leo_cheki_bot</span>
+            <span class="stamp">опрос идёт</span>
+          </div>
+          <div class="row">
+            <span class="k">Владелец</span>
+            <span class="v nick">@leogodnik</span>
+          </div>
+        </div>
+
+        <div class="grp bts">
+          <button class="bt" type="button" aria-expanded="true">Заменить бота</button>
+          <button class="bt" type="button">Отключить телеграм</button>
+        </div>
+
+        <h2>Заменить бота</h2>
+        <div class="card plain">
+          <div class="field">
+            <label for="newtok">Токен нового бота от @BotFather</label>
+            <input class="fin" id="newtok" type="text" autocomplete="off" spellcheck="false" placeholder="8123456789:AAHf-kL2m7nQ...">
+          </div>
+          <p class="note">Что при этом произойдёт:</p>
+          <ul class="conseq">
+            <li>Список пишущих <b>сохранится</b> — телеграм опознаёт человека одним номером
+                у всех ботов.</li>
+            <li>Неразобранные сообщения <b>потеряются</b>: у нового бота своя очередь.</li>
+            <li>Опрос <b>перезапустится сам</b>, сбросив offset — он у каждого бота свой.
+                Останавливать ничего не надо.</li>
+          </ul>
+          <div class="bts spaced">
+            <button class="bt go" type="button">Заменить</button>
+            <button class="bt" type="button">Отмена</button>
+          </div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ─────── движок ─────── -->
+
+    <section class="pane" id="p-engine" hidden>
+      <div class="sheet"><div class="col">
+        <h1>Движок</h1>
+        <p class="lede">Кто разбирает фотографию чека. Перезапуск не нужен: следующий чек
+           разберётся уже новым движком.</p>
+
+        <div class="card">
+          <label class="pick">
+            <input type="radio" name="engine" value="claude" checked>
+            <span class="nm">Claude Code</span><span class="tag">найден, 2.1.232</span>
+          </label>
+          <label class="pick">
+            <input type="radio" name="engine" value="codex" disabled>
+            <span class="nm">Codex</span><span class="tag">не установлен · пока не поддержан</span>
+          </label>
+        </div>
+
+        <p class="note">Codex прочитает чек не хуже, но адаптер к нему ни разу не запускали
+           вживую, а непроверенный режим, сломавшись, оставит впечатление, что кривой весь
+           проект. Появится отдельным файлом, когда будет чем проверить.</p>
+      </div></div>
+    </section>
+
+    <!-- ─────── бот не запущен: ключ в окружении ─────── -->
+
+    <section class="pane" id="p-blocked" hidden>
+      <div class="sheet"><div class="col">
+        <h1>Бот не запущен</h1>
+        <p class="lede">Движок, таблица и телеграм в порядке. Мешает одна строка в настройках
+           терминала.</p>
+
+        <div class="att-box">
+          <h2>В окружении найден ANTHROPIC_API_KEY</h2>
+          <p>С этим ключом Claude Code берёт деньги за каждый запрос мимо подписки, и узнаете
+             вы об этом из счёта. Поэтому бот не стартует, а не тратит молча.</p>
+          <p>Откройте <code>~/.zshrc</code> и удалите строку, которая начинается на
+             <code>export ANTHROPIC_API_KEY=</code>. Потом закройте терминал и откройте
+             заново: старое окно помнит переменную даже после правки файла.</p>
+          <p>Затем снова <code>python bot.py</code>.</p>
+        </div>
+
+        <p class="note">Ключ мог поставить не только вы: его прописывают инструкции к другим
+           инструментам. Если строки в <code class="inline">~/.zshrc</code> нет, посмотрите
+           <code class="inline">~/.zprofile</code> и <code class="inline">~/.bashrc</code>.</p>
+      </div></div>
+    </section>
+
+  </main>
+</div>
+
+<nav class="demo" aria-label="Навигация по макету">
+  <span class="lbl">Макет</span>
+  <button type="button" data-pane="feed" aria-current="true">лента</button>
+  <button type="button" data-pane="empty">пустое начало</button>
+  <button type="button" data-pane="people">кто пишет</button>
+  <button type="button" data-pane="telegram">телеграм</button>
+  <button type="button" data-pane="engine">движок</button>
+  <button type="button" data-pane="blocked">ключ в окружении</button>
+  <button type="button" id="toggle-today">записи: пусто</button>
+  <a class="last" href="setup.html">мастер ↗</a>
+</nav>
+
+<script>
+  (function () {
+    var app = document.getElementById("app");
+    var panes = document.querySelectorAll(".pane");
+    var navs = document.querySelectorAll(".nv[data-pane]");
+    var demos = document.querySelectorAll(".demo button[data-pane]");
+
+    function show(name) {
+      panes.forEach(function (p) { p.hidden = p.id !== "p-" + name; });
+      /* «Пустое начало» — то же «Новый расход», поэтому пункт сайдбара остаётся
+         подсвеченным на обоих состояниях ленты. */
+      var lit = (name === "empty") ? "feed" : name;
+      navs.forEach(function (n) { n.setAttribute("aria-current", String(n.dataset.pane === lit)); });
+      demos.forEach(function (d) { d.setAttribute("aria-current", String(d.dataset.pane === name)); });
+      app.classList.remove("menu-open");
+      var sc = document.querySelector(".pane:not([hidden]) .flow, .pane:not([hidden]) .sheet");
+      if (sc) sc.scrollTop = 0;
+    }
+
+    document.querySelectorAll("[data-pane]").forEach(function (el) {
+      el.addEventListener("click", function () { show(el.dataset.pane); });
+    });
+
+    var burger = document.getElementById("burger");
+    burger.addEventListener("click", function () {
+      var open = app.classList.toggle("menu-open");
+      burger.setAttribute("aria-expanded", String(open));
+    });
+
+    var today = document.getElementById("today");
+    var none = document.getElementById("today-none");
+    var toggle = document.getElementById("toggle-today");
+    toggle.addEventListener("click", function () {
+      var empty = today.hidden;
+      today.hidden = !empty;
+      none.hidden = empty;
+      toggle.textContent = empty ? "записи: пусто" : "записи: есть";
+    });
+
+    var flow = document.querySelector("#p-feed .flow");
+    if (flow) flow.scrollTop = flow.scrollHeight;
+
+    /* Перетаскивание файла подсвечивает поле ввода. Ничего никуда не отправляется:
+       это макет. */
+    ["dragenter", "dragover"].forEach(function (t) {
+      document.addEventListener(t, function (e) { e.preventDefault(); app.classList.add("dragging"); });
+    });
+    ["dragleave", "drop"].forEach(function (t) {
+      document.addEventListener(t, function (e) { e.preventDefault(); app.classList.remove("dragging"); });
+    });
+  })();
+</script>
+
+</body>
+</html>

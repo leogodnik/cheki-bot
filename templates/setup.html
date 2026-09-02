@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чеки — настройка</title>
+<link rel="stylesheet" href="../static/style.css">
+</head>
+<body>
+
+<!--
+  МАСТЕР УСТАНОВКИ. Два обязательных шага — движок и таблица, — после них уже можно
+  работать. Телеграм подключается потом или никогда: он нужен, только чтобы слать чеки
+  с телефона и пускать коллег.
+
+  Счётчик поэтому «из 2», а не «из 3»: спека ставит экран готовности между вторым
+  шагом и телеграмом, и подписать телеграм третьим из трёх значило бы вернуть его
+  на критический путь, с которого его как раз убрали.
+
+  Все экраны в одном файле, неактивные скрыты. Переключение — инлайновым скриптом
+  внизу, без единого внешнего запроса.
+-->
+
+<svg style="display:none" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 24 24">
+    <path fill="#C4714F" d="M4.6 3.2h14.8v16.1l-2.47-1.72-2.46 1.72-2.47-1.72-2.46 1.72-2.47-1.72L4.6 19.3z"/>
+    <path stroke="#FAF9F5" stroke-width="1.5" stroke-linecap="round" fill="none" d="M8 7.7h8M8 11.2h5"/>
+  </symbol>
+  <symbol id="i-tg" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M21.5 3.5L2.8 10.6l5.4 1.9 1.9 5.6 3-3.6 4.7 3.4z"/></symbol>
+</svg>
+
+<div class="wiz">
+  <div class="col">
+
+    <div class="wiz-top"><svg class="mark"><use href="#mark"/></svg><b>Чеки</b></div>
+
+    <!-- ═════════ Шаг 1. Движок ═════════ -->
+
+    <section class="step" id="s-engine">
+      <div class="steps">
+        <span>Шаг 1 из 2</span>
+        <span class="pips" aria-hidden="true"><i class="on"></i><i></i></span>
+      </div>
+
+      <h1>Кто будет читать чеки</h1>
+      <p class="lede">Фотографию разбирает агент у вас на компьютере — тот же, в котором
+         вы работаете. Мы уже сходили в терминал и посмотрели, что установлено.</p>
+
+      <div class="grp">
+        <div class="card">
+          <label class="pick">
+            <input type="radio" name="engine" value="claude" checked>
+            <span class="nm">Claude Code</span><span class="tag">найден, 2.1.232</span>
+          </label>
+          <label class="pick">
+            <input type="radio" name="engine" value="codex" disabled>
+            <span class="nm">Codex</span><span class="tag">не установлен · пока не поддержан</span>
+          </label>
+        </div>
+        <p class="note">Codex прочитает чек не хуже, но адаптер к нему ни разу не запускали
+           вживую. Отдать вам непроверенный режим было бы нечестно: сломавшись, он оставит
+           впечатление, что кривой весь проект.</p>
+      </div>
+
+      <div class="nav">
+        <button class="bt big" type="button">Проверить снова</button>
+        <button class="bt go big grow" type="button" data-go="s-sheet">Дальше</button>
+      </div>
+    </section>
+
+    <!-- ═════════ Шаг 1, тупик: движка нет ═════════ -->
+
+    <section class="step" id="s-noengine" hidden>
+      <div class="steps">
+        <span>Шаг 1 из 2</span>
+        <span class="pips" aria-hidden="true"><i class="on"></i><i></i></span>
+      </div>
+
+      <h1>Движок не найден</h1>
+      <p class="lede">Ни <code class="inline">claude</code>, ни <code class="inline">codex</code>
+         в терминале не отвечают. Без движка бот бессмыслен: читать чек будет нечем.</p>
+
+      <div class="grp">
+        <div class="code">
+          <div class="code-top">
+            <span>Установить Claude Code</span>
+            <button class="bt copy" type="button">Скопировать</button>
+          </div>
+          <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
+        </div>
+        <p class="note">Выполните команду в терминале, дождитесь конца установки и нажмите
+           «Проверить снова». Если <code class="inline">npm</code> тоже не найден — сначала
+           поставьте Node.js с nodejs.org.</p>
+      </div>
+
+      <div class="nav">
+        <button class="bt go big" type="button" data-go="s-engine">Проверить снова</button>
+      </div>
+    </section>
+
+    <!-- ═════════ Шаг 2. Таблица ═════════ -->
+
+    <section class="step" id="s-sheet" hidden>
+      <div class="steps">
+        <span>Шаг 2 из 2</span>
+        <span class="pips" aria-hidden="true"><i class="on"></i><i class="on"></i></span>
+      </div>
+
+      <h1>Google-таблица</h1>
+      <p class="lede">Минут пять, и это последнее, что нужно сделать руками. Таблица готова:
+         два листа, «Расходы» и «Статьи», с нужными заголовками. Вам остаётся сделать копию
+         и вставить в неё кусок кода.</p>
+
+      <div class="grp">
+        <h2>Шаблон</h2>
+        <div class="card">
+          <div class="row">
+            <span class="k">Таблица с обоими листами</span>
+            <a class="bt v" href="https://docs.google.com/spreadsheets/d/1cheki-shablon-primer/copy"
+               target="_blank" rel="noopener">Открыть шаблон</a>
+          </div>
+        </div>
+        <p class="note">В открывшейся таблице: <b>Файл → Создать копию</b>. Копия ваша,
+           менять в ней можно всё.</p>
+      </div>
+
+      <div class="grp">
+        <h2>Код для таблицы</h2>
+        <p class="note tight">В своей копии: <b>Расширения → Apps Script</b>.
+           Всё, что там есть, удалите и вставьте это. Секретное слово уже вписано —
+           придумывать и запоминать ничего не надо.</p>
+
+        <!-- В работающем мастере сюда подставляется sheet.gs целиком: программа читает
+             файл и меняет __СЕКРЕТ__ на сгенерированное значение. Здесь тот же код,
+             сокращённый до сути, чтобы экран оставался обозримым. -->
+        <div class="code">
+          <div class="code-top">
+            <span>Apps Script</span>
+            <button class="bt copy" type="button">Скопировать</button>
+          </div>
+          <pre><code>const SECRET = 'k7m2-qp94-xr3v';
+
+function doPost(e) {
+  const d = JSON.parse(e.postData.contents);
+  if (d.secret !== SECRET) return reply({ok: false, error: 'нет доступа'});
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Расходы');
+  if (!sheet) return reply({ok: false, error: 'в таблице нет листа «Расходы»'});
+
+  sheet.appendRow([
+    d.date, d.amount, d.currency, d.merchant, d.category,
+    d.payment, d.source, d.who, d.status, d.file, new Date()
+  ]);
+  return reply({ok: true, row: sheet.getLastRow()});
+}
+
+function doGet(e) {
+  if (e.parameter.secret !== SECRET) return reply({ok: false, error: 'нет доступа'});
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Статьи');
+  if (!sheet) return reply({ok: false, error: 'в таблице нет листа «Статьи»'});
+
+  const last = sheet.getLastRow();
+  const rows = last &lt; 2 ? [] : sheet.getRange(2, 1, last - 1, 1).getValues();
+  return reply({ok: true, categories: rows.map(r => String(r[0]).trim()).filter(Boolean)});
+}
+
+function reply(o) {
+  return ContentService.createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
+}</code></pre>
+        </div>
+
+        <p class="note">Дальше: <b>Развернуть → Новое развёртывание → Веб-приложение</b>,
+           доступ — «Все». Google попросит разрешения и выдаст адрес, который кончается
+           на <code class="inline">/exec</code>.</p>
+      </div>
+
+      <div class="grp">
+        <h2>Адрес веб-приложения</h2>
+        <div class="card plain">
+          <div class="field">
+            <label for="webapp">Ссылка, которую выдал Google</label>
+            <input class="fin" id="webapp" type="url" autocomplete="off" spellcheck="false"
+                   placeholder="https://script.google.com/macros/s/AKfy.../exec">
+          </div>
+          <div class="bts after-field">
+            <button class="bt" type="button">Проверить таблицу</button>
+          </div>
+        </div>
+
+        <div class="verdict">
+          <svg class="mark"><use href="#mark"/></svg>
+          <span>Таблица отвечает. Прочитано <b>16 статей</b>.</span>
+        </div>
+
+        <p class="note">Число здесь важнее галочки. Ноль статей означает, что лист называется
+           не «Статьи», — и увидеть это лучше сейчас, чем через неделю, когда бот начнёт
+           складывать расходы мимо справочника.</p>
+      </div>
+
+      <div class="nav">
+        <button class="bt big" type="button" data-go="s-engine">Назад</button>
+        <button class="bt go big grow" type="button" data-go="s-done">Готово</button>
+      </div>
+    </section>
+
+    <!-- ═════════ Готово ═════════ -->
+
+    <section class="step" id="s-done" hidden>
+      <div class="steps">
+        <span>Настройка закончена</span>
+        <span class="pips" aria-hidden="true"><i class="on"></i><i class="on"></i></span>
+      </div>
+
+      <h1>Перетащите первый чек</h1>
+      <p class="lede">Всё готово: движок читает, таблица принимает. Откройте рабочее место
+         и бросьте в окно фотографию чека — через полминуты в таблице появится строка.</p>
+
+      <div class="grp">
+        <div class="card">
+          <div class="row"><span class="k">Движок</span><span class="v">Claude Code 2.1.232</span></div>
+          <div class="row"><span class="k">Таблица</span><span class="v">16 статей</span></div>
+          <div class="row"><span class="k">Телеграм</span><span class="v noname">не подключён</span></div>
+        </div>
+      </div>
+
+      <div class="grp">
+        <h2>Необязательно</h2>
+        <div class="card plain">
+          <p class="opt-p">
+            Телеграм нужен, чтобы слать чеки с телефона и пускать коллег. Без него рабочее
+            место работает полностью — подключить можно когда угодно, из раздела «Телеграм».
+          </p>
+          <button class="bt" type="button" data-go="s-token">
+            Подключить телеграм
+          </button>
+        </div>
+      </div>
+
+      <div class="nav">
+        <a class="bt go big" href="workspace.html">Открыть рабочее место</a>
+      </div>
+    </section>
+
+    <!-- ═════════ Телеграм: токен ═════════ -->
+
+    <section class="step" id="s-token" hidden>
+      <div class="steps"><span>Необязательно · Телеграм</span></div>
+
+      <h1>Токен бота</h1>
+      <p class="lede">Откройте в телеграме <b>@BotFather</b> — это официальный бот, который
+         заводит всех остальных. Отправьте ему <b>/newbot</b> и придумайте имя. В ответ
+         придёт длинная строка с двоеточием посередине: это и есть токен.</p>
+
+      <div class="grp">
+        <div class="card plain">
+          <div class="field">
+            <label for="token">Строка от BotFather</label>
+            <input class="fin" id="token" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="8123456789:AAHf-kL2m7nQ...">
+          </div>
+          <div class="bts">
+            <button class="bt" type="button">Проверить токен</button>
+          </div>
+        </div>
+
+        <div class="verdict">
+          <svg class="mark"><use href="#mark"/></svg>
+          <span>Токен принят. Бота зовут <b>@leo_cheki_bot</b> — это он?</span>
+        </div>
+
+        <p class="note">Строка никуда, кроме вашего компьютера, не уходит: рабочее место
+           живёт на 127.0.0.1 и пишет токен в файл <code class="inline">.env</code> рядом
+           с ботом.</p>
+      </div>
+
+      <div class="nav">
+        <button class="bt big" type="button" data-go="s-done">Назад</button>
+        <button class="bt go big grow" type="button" data-go="s-wait">Да, это он</button>
+      </div>
+    </section>
+
+    <!-- ═════════ Телеграм: ждём сообщение ═════════ -->
+
+    <section class="step" id="s-wait" hidden>
+      <div class="steps"><span>Необязательно · Телеграм</span></div>
+
+      <h1>Напишите своему боту</h1>
+      <p class="lede">Откройте в телеграме <b>@leo_cheki_bot</b> и отправьте что угодно —
+         хоть «привет». Вводить сюда ничего не нужно: мы узнаем вас сами.</p>
+
+      <div class="grp">
+        <div class="wait">
+          <span class="pulse" aria-hidden="true"></span>
+          <span>Ждём сообщения…</span>
+        </div>
+        <p class="note">Отвечать всем подряд бот не станет: пишут ему многие, а записывает
+           он только тех, кто в списке. Сейчас там нет никого, включая вас.</p>
+      </div>
+
+      <div class="nav">
+        <button class="bt big" type="button" data-go="s-token">Назад</button>
+      </div>
+    </section>
+
+    <!-- ═════════ Телеграм: это вы? ═════════ -->
+
+    <section class="step" id="s-hello" hidden>
+      <div class="steps"><span>Необязательно · Телеграм</span></div>
+
+      <h1>Напишите своему боту</h1>
+      <p class="lede">Пришло сообщение. Если это вы — впустите себя, и телеграм подключён.</p>
+
+      <div class="grp">
+        <div class="card">
+          <div class="row">
+            <span class="k">Леонид Годник</span>
+            <span class="v nick">@leogodnik</span>
+            <span class="stamp">только что</span>
+          </div>
+        </div>
+
+        <div class="verdict">
+          <svg class="mark"><use href="#mark"/></svg>
+          <span>Это вы, <b>@leogodnik</b>?</span>
+        </div>
+
+        <div class="bts spaced">
+          <button class="bt go" type="button" data-go="s-tgdone">Да, это я</button>
+          <button class="bt" type="button" data-go="s-wait">Нет, ждём дальше</button>
+        </div>
+
+        <p class="note">Числовой идентификатор бот запомнит сам и запишет в
+           <code class="inline">settings.json</code>. Вам его искать не придётся — вы его
+           вообще ни разу не увидите.</p>
+      </div>
+    </section>
+
+    <!-- ═════════ Телеграм подключён ═════════ -->
+
+    <section class="step" id="s-tgdone" hidden>
+      <div class="steps"><span>Необязательно · Телеграм</span></div>
+
+      <h1>Телеграм подключён</h1>
+      <p class="lede">Теперь чеки можно слать и с телефона. Записи оттуда появятся в той же
+         ленте, с пометкой, кто прислал.</p>
+
+      <div class="grp">
+        <div class="card">
+          <div class="row"><span class="k">Движок</span><span class="v">Claude Code 2.1.232</span></div>
+          <div class="row"><span class="k">Таблица</span><span class="v">16 статей</span></div>
+          <div class="row"><span class="k">Телеграм</span><span class="v nick">@leo_cheki_bot</span></div>
+          <div class="row"><span class="k">Может писать</span><span class="v nick">@leogodnik</span></div>
+        </div>
+        <p class="note">Пустить кого-то ещё можно в разделе «Кто может писать»: человек пишет
+           боту, появляется в списке стучавшихся, вы нажимаете «Впустить».</p>
+      </div>
+
+      <div class="nav">
+        <a class="bt go big" href="workspace.html">Открыть рабочее место</a>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<nav class="demo" aria-label="Навигация по макету">
+  <span class="lbl">Макет</span>
+  <button type="button" data-go="s-engine" aria-current="true">1 движок</button>
+  <button type="button" data-go="s-noengine">движка нет</button>
+  <button type="button" data-go="s-sheet">2 таблица</button>
+  <button type="button" data-go="s-done">готово</button>
+  <button type="button" data-go="s-token">тг: токен</button>
+  <button type="button" data-go="s-wait">тг: ждём</button>
+  <button type="button" data-go="s-hello">тг: это вы</button>
+  <button type="button" data-go="s-tgdone">тг: готово</button>
+  <a class="last" href="workspace.html">рабочее место ↗</a>
+</nav>
+
+<script>
+  (function () {
+    var steps = document.querySelectorAll(".step");
+    var tabs = document.querySelectorAll(".demo button[data-go]");
+
+    function go(id) {
+      steps.forEach(function (s) { s.hidden = s.id !== id; });
+      tabs.forEach(function (t) { t.setAttribute("aria-current", String(t.dataset.go === id)); });
+      window.scrollTo(0, 0);
+    }
+
+    document.querySelectorAll("[data-go]").forEach(function (b) {
+      b.addEventListener("click", function () { go(b.dataset.go); });
+    });
+
+    /* Экран можно открыть сразу по адресу: setup.html#s-sheet */
+    if (location.hash && document.querySelector(".step" + location.hash)) {
+      go(location.hash.slice(1));
+      setTimeout(function () { window.scrollTo(0, 0); }, 0);
+    }
+
+    /* Копирование без внешних библиотек: современный буфер обмена, а если страница
+       открыта по file:// и он недоступен — старый способ через выделение. */
+    document.querySelectorAll(".copy").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var text = btn.closest(".code").querySelector("code").innerText;
+        var ok = function () { btn.textContent = "Скопировано"; setTimeout(function () { btn.textContent = "Скопировать"; }, 1600); };
+        var no = function () { btn.textContent = "Выделите вручную"; setTimeout(function () { btn.textContent = "Скопировать"; }, 2200); };
+        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(ok, no); return; }
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        var done = false;
+        try { done = document.execCommand("copy"); } catch (e) { done = false; }
+        document.body.removeChild(ta);
+        done ? ok() : no();
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>
