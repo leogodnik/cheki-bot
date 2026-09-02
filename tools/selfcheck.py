@@ -10,10 +10,12 @@
 
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import checks
 import state
 
 passed = 0
@@ -57,6 +59,61 @@ with tempfile.TemporaryDirectory() as folder:
     first = state.load()
     first["queue"].append({"merchant": "проверка"})
     check("заготовка не общая на всех", state.load()["queue"] == [])
+
+print()
+print("проверки без модели")
+today = date(2026, 8, 23)
+categories = ["Продукты", "Топливо", "Прочее"]
+clean = {
+    "is_expense": True, "date": "2026-08-20", "amount": 1004.7,
+    "currency": "RUB", "merchant": "Пятёрочка", "category": "Продукты",
+    "payment": "карта", "confidence": "высокая", "doubts": "",
+    "reply": "Пятёрочка, 1004,70 ₽, продукты",
+}
+
+verdict = checks.review(clean, categories, today)
+check("чистый чек проходит как «готово»",
+      verdict["status"] == "готово" and not verdict["reasons"])
+
+verdict = checks.review(dict(clean, date="2026-09-20"), categories, today)
+check("дата в будущем ловится при высокой уверенности",
+      verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, date="2025-01-01"), categories, today)
+check("дата старше года ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, date=""), categories, today)
+check("пустая дата ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount=None), categories, today)
+check("пустая сумма ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount=0), categories, today)
+check("нулевая сумма ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount=True), categories, today)
+check("«да» вместо суммы ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, amount=100000), categories, today)
+check("ровно сто тысяч проходят", verdict["status"] == "готово")
+
+verdict = checks.review(dict(clean, amount=100000.01), categories, today)
+check("сумма больше ста тысяч ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, confidence="низкая"), categories, today)
+check("низкая уверенность ловится", verdict["status"] == "проверить")
+
+verdict = checks.review(dict(clean, category="Еда"), categories, today)
+check("статья не из справочника заменяется на «Прочее»",
+      verdict["category"] == "Прочее")
+check("но статуса не меняет", verdict["status"] == "готово")
+check("и человеку про это говорится",
+      any("Еда" in warning for warning in verdict["warnings"]))
+
+verdict = checks.review(dict(clean, doubts="время не видно"), categories, today)
+check("сомнения агента доходят до человека",
+      verdict["warnings"] == ["время не видно"])
+check("но сами по себе статуса не меняют", verdict["status"] == "готово")
 
 print()
 if failed:
