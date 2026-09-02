@@ -217,7 +217,11 @@ def worker(env, st, jobs):
             print(f"рассылка события сорвалась: {error}")
         finally:
             # Сохраняем в любом случае — и когда рассылка прошла, и когда нет.
-            memory.save(st)
+            try:
+                memory.save(st)
+            except Exception as error:
+                # Не сохранили — поток всё равно должен продолжаться.
+                print(f"не сохранил состояние: {error}")
 
 
 def telegram_loop(env, st, jobs):
