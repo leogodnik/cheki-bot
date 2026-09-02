@@ -200,6 +200,28 @@ check("сомнения агента доходят до человека",
 check("но сами по себе статуса не меняют", verdict["status"] == "готово")
 
 print()
+print("копия мозга агента")
+
+# Боевой путь читает prompt.md. Дословная копия лежит ещё и в
+# .claude/agents/expense-reader.md — чтобы звать агента руками при отладке.
+# Два файла с одним текстом разъезжаются молча: правишь один, второй остаётся
+# прежним, и замечаешь это через месяц, когда отладочный агент отвечает не так,
+# как боевой. Пусть расхождение падает в тот же день.
+root = Path(__file__).resolve().parent.parent
+prompt_text = (root / "prompt.md").read_text(encoding="utf-8")
+copy_path = root / ".claude" / "agents" / "expense-reader.md"
+
+check("копия промпта на месте", copy_path.exists())
+if copy_path.exists():
+    copy_text = copy_path.read_text(encoding="utf-8")
+    # Шапка между --- есть только у копии: она говорит Claude Code, как зовут
+    # агента и что ему дать. К телу промпта она отношения не имеет.
+    if copy_text.startswith("---\n"):
+        copy_text = copy_text.split("\n---\n", 1)[-1]
+    check("тело expense-reader.md слово в слово совпадает с prompt.md",
+          copy_text.strip("\n") == prompt_text.strip("\n"))
+
+print()
 if failed:
     print(f"провалено {len(failed)}: " + ", ".join(failed))
     sys.exit(1)

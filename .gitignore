@@ -9,8 +9,16 @@ state.json.tmp
 
 # служебное
 .superpowers/
-.claude/
 __pycache__/
 *.pyc
 .venv/
 .DS_Store
+
+# Папка Claude Code закрыта, но копия мозга агента в ней — открыта: ученику
+# она полезна, а расходиться с prompt.md ей нельзя. Git не заглядывает внутрь
+# исключённой папки, поэтому закрываем её содержимым и шаг за шагом открываем
+# дорогу к одному файлу.
+.claude/*
+!.claude/agents/
+.claude/agents/*
+!.claude/agents/expense-reader.md
