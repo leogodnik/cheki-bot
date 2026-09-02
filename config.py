@@ -14,7 +14,6 @@ settings.json перечитывается перед каждым сообще�
 
 import json
 import os
-import sys
 import threading
 from pathlib import Path
 
@@ -28,10 +27,6 @@ ENV_PATH = BASE_DIR / ".env"
 # телеграма. Без замка они затрут запись друг друга на середине.
 _WRITE_LOCK = threading.Lock()
 
-# Телеграм необязателен: рабочее место в браузере работает без него. Без
-# таблицы бот бессмыслен — писать будет некуда.
-REQUIRED_ENV = ("SHEET_URL", "SHEET_SECRET")
-
 # Пустой белый список — безопасное состояние: бот не отвечает никому.
 #
 # Ник подключённого бота лежит здесь, а не в state.json, по тому же признаку,
@@ -44,15 +39,26 @@ DEFAULTS = {"engine": "claude_code", "allowed": [], "knocked": [], "owner": "",
 
 
 def load_env():
-    """Секреты из .env. Не хватает строки — выходим с внятным текстом."""
+    """Секреты из .env. Файла нет — не беда: настраивать будет мастер."""
     load_dotenv(BASE_DIR / ".env")
-    missing = [name for name in REQUIRED_ENV if not os.getenv(name)]
-    if missing:
-        sys.exit(
-            "В .env не заполнено: " + ", ".join(missing) + ".\n"
-            "Возьмите образец: cp .env.example .env"
-        )
     return read_env()
+
+
+def ready(env):
+    """Настроено ли главное. Ложь — показываем мастер, правда — рабочее место.
+
+    Главное — это таблица. Телеграм необязателен: рабочее место в браузере
+    работает без него, и гнать человека по мастеру из-за неподключённого
+    телеграма значит вернуть телеграм на критический путь, с которого его как
+    раз убрали. Без таблицы бот бессмыслен — писать будет некуда, и рабочее
+    место показывало бы поле ввода, которое ничего не может.
+
+    Движок тоже не входит, хотя мастер про него спрашивает. Движок может
+    исчезнуть через месяц после установки — переименовали, снесли, сменили
+    PATH, — и выкидывать в мастер человека, у которого уже полсотни строк в
+    таблице, было бы наказанием за чужую ошибку. Про исчезнувший движок
+    говорит сайдбар и лента, а не мастер."""
+    return bool(env["sheet_url"] and env["sheet_secret"])
 
 
 def read_env():
@@ -161,8 +167,7 @@ def load_settings():
         data = json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))
         settings.update(data)
     except FileNotFoundError:
-        print("settings.json не найден — бот никого не впустит. "
-              "cp settings.example.json settings.json")
+        print("settings.json пока нет — заведётся при первой настройке.")
         return json.loads(json.dumps(DEFAULTS))
     except (json.JSONDecodeError, TypeError, ValueError) as error:
         print(f"settings.json испорчен ({error}) — бот никого не впустит, "

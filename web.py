@@ -37,7 +37,14 @@ def create(env, st, jobs, blocked=""):
 
     @app.get("/")
     def page():
-        return render_template("workspace.html")
+        """Мастер или рабочее место. Решает одно: настроена ли таблица.
+
+        Один адрес на оба состояния, а не два: человек, закрывший вкладку
+        посреди установки, открывает тот же http://127.0.0.1:8765 и попадает
+        туда, где остановился."""
+        if config.ready(env):
+            return render_template("workspace.html")
+        return render_template("setup.html")
 
     @app.get("/photo/<name>")
     def sent_photo(name):

@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чеки — настройка</title>
-<link rel="stylesheet" href="../static/style.css">
-<link rel="icon" href="../static/favicon.svg" type="image/svg+xml">
-<link rel="icon" href="../static/favicon.png" sizes="32x32">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/static/favicon.png" sizes="32x32">
 </head>
 <body>
 
@@ -19,8 +19,9 @@
   шагом и телеграмом, и подписать телеграм третьим из трёх значило бы вернуть его
   на критический путь, с которого его как раз убрали.
 
-  Все экраны в одном файле, неактивные скрыты. Переключение — инлайновым скриптом
-  внизу, без единого внешнего запроса.
+  Все экраны в одном файле, неактивные скрыты. Переключение и разговор с сервером —
+  в /static/setup.js. Выдуманных данных на экранах нет: числа, версии и ники
+  приезжают с сервера.
 -->
 
 <svg style="display:none" aria-hidden="true">
@@ -241,7 +242,7 @@ function reply(o) {
       </div>
 
       <div class="nav">
-        <a class="bt go big" href="workspace.html">Открыть рабочее место</a>
+        <a class="bt go big" href="/">Открыть рабочее место</a>
       </div>
     </section>
 
@@ -360,66 +361,14 @@ function reply(o) {
       </div>
 
       <div class="nav">
-        <a class="bt go big" href="workspace.html">Открыть рабочее место</a>
+        <a class="bt go big" href="/">Открыть рабочее место</a>
       </div>
     </section>
 
   </div>
 </div>
 
-<nav class="demo" aria-label="Навигация по макету">
-  <span class="lbl">Макет</span>
-  <button type="button" data-go="s-engine" aria-current="true">1 движок</button>
-  <button type="button" data-go="s-noengine">движка нет</button>
-  <button type="button" data-go="s-sheet">2 таблица</button>
-  <button type="button" data-go="s-done">готово</button>
-  <button type="button" data-go="s-token">тг: токен</button>
-  <button type="button" data-go="s-wait">тг: ждём</button>
-  <button type="button" data-go="s-hello">тг: это вы</button>
-  <button type="button" data-go="s-tgdone">тг: готово</button>
-  <a class="last" href="workspace.html">рабочее место ↗</a>
-</nav>
-
-<script>
-  (function () {
-    var steps = document.querySelectorAll(".step");
-    var tabs = document.querySelectorAll(".demo button[data-go]");
-
-    function go(id) {
-      steps.forEach(function (s) { s.hidden = s.id !== id; });
-      tabs.forEach(function (t) { t.setAttribute("aria-current", String(t.dataset.go === id)); });
-      window.scrollTo(0, 0);
-    }
-
-    document.querySelectorAll("[data-go]").forEach(function (b) {
-      b.addEventListener("click", function () { go(b.dataset.go); });
-    });
-
-    /* Экран можно открыть сразу по адресу: setup.html#s-sheet */
-    if (location.hash && document.querySelector(".step" + location.hash)) {
-      go(location.hash.slice(1));
-      setTimeout(function () { window.scrollTo(0, 0); }, 0);
-    }
-
-    /* Копирование без внешних библиотек: современный буфер обмена, а если страница
-       открыта по file:// и он недоступен — старый способ через выделение. */
-    document.querySelectorAll(".copy").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var text = btn.closest(".code").querySelector("code").innerText;
-        var ok = function () { btn.textContent = "Скопировано"; setTimeout(function () { btn.textContent = "Скопировать"; }, 1600); };
-        var no = function () { btn.textContent = "Выделите вручную"; setTimeout(function () { btn.textContent = "Скопировать"; }, 2200); };
-        if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(ok, no); return; }
-        var ta = document.createElement("textarea");
-        ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-        document.body.appendChild(ta); ta.select();
-        var done = false;
-        try { done = document.execCommand("copy"); } catch (e) { done = false; }
-        document.body.removeChild(ta);
-        done ? ok() : no();
-      });
-    });
-  })();
-</script>
+<script src="/static/setup.js"></script>
 
 </body>
 </html>

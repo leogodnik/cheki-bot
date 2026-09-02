@@ -303,7 +303,11 @@ def main():
 
     web.quiet()
     port = web.choose_port()
-    print(f"Рабочее место: http://127.0.0.1:{port}")
+    if config.ready(env):
+        print(f"Рабочее место: http://127.0.0.1:{port}")
+    else:
+        print(f"Настройка: http://127.0.0.1:{port}")
+        print("Таблица ещё не подключена — открою мастер.")
     print("Ctrl+C — выход.")
     try:
         web.create(env, st, jobs, blocked).run(host="127.0.0.1", port=port,
