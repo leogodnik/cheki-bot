@@ -94,7 +94,7 @@ def knock(env, message):
     settings["knocked"] = knocked
     config.save_settings(settings)
     print(f"постучался чужой: {who(message)} — впустите его в сайдбаре, "
-          "раздел «Кто может писать»")
+          "раздел «Доступ»")
     say(env["bot_token"], message["chat"]["id"],
         "Этот бот записывает расходы своего хозяина. "
         "Если он вас ждёт — передайте ему, что вы написали.")
