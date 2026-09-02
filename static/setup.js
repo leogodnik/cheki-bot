@@ -56,6 +56,71 @@
     setTimeout(function () { window.scrollTo(0, 0); }, 0);
   }
 
+  /* ═════════ Шаг 1. Движок ═════════ */
+
+  /* Панель сама сходила в терминал и посмотрела, что установлено, — человеку
+     не нужно ни знать про PATH, ни печатать команду с --version.
+
+     Нашёлся один движок — он и выбран: выбирать не из чего, а лишний вопрос
+     на первом экране отваливает половину группы. */
+  function drawEngines(answer) {
+    var card = document.getElementById("w-engines");
+    card.textContent = "";
+    var found = [];
+
+    Object.keys(answer.engines).forEach(function (key) {
+      var version = answer.engines[key];
+      if (version) found.push(key);
+
+      var pick = document.createElement("label");
+      pick.className = "pick";
+      var dot = document.createElement("input");
+      dot.type = "radio";
+      dot.name = "engine";
+      dot.value = key;
+      dot.disabled = !version;
+      dot.checked = Boolean(version) && found.length === 1;
+      pick.appendChild(dot);
+
+      var name = document.createElement("span");
+      name.className = "nm";
+      name.textContent = answer.titles[key] || key;
+      pick.appendChild(name);
+
+      var tag = document.createElement("span");
+      tag.className = "tag";
+      tag.textContent = version || "не установлен";
+      pick.appendChild(tag);
+
+      card.appendChild(pick);
+    });
+
+    /* Не нашлось ничего — тупик, и это правильный ответ, а не поломка
+       мастера: без движка бот бессмыслен, читать чек будет нечем. */
+    if (!found.length) go("s-noengine");
+  }
+
+  function loadEngines() {
+    fetch("/api/engines")
+      .then(function (response) { return response.json(); })
+      .then(drawEngines)
+      .catch(function () {});
+  }
+
+  document.getElementById("w-recheck").addEventListener("click", loadEngines);
+  document.getElementById("w-noengine-recheck")
+    .addEventListener("click", loadEngines);
+
+  document.getElementById("w-engine-next").addEventListener("click", function () {
+    var picked = document.querySelector("#w-engines input:checked");
+    if (!picked) return;
+    /* Выбор запоминается тем же маршрутом, которым его меняет сайдбар.
+       Второго места, где движок ложится в settings.json, нет. */
+    ask("/api/engine", {engine: picked.value}).then(function () { go("s-sheet"); });
+  });
+
+  loadEngines();
+
   /* Копирование без внешних библиотек: современный буфер обмена, а если страница
      открыта по file:// и он недоступен — старый способ через выделение. */
   document.querySelectorAll(".copy").forEach(function (btn) {

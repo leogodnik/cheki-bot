@@ -50,24 +50,20 @@
          вы работаете. Мы уже сходили в терминал и посмотрели, что установлено.</p>
 
       <div class="grp">
-        <div class="card">
-          <label class="pick">
-            <input type="radio" name="engine" value="claude" checked>
-            <span class="nm">Claude Code</span><span class="tag">найден, 2.1.232</span>
-          </label>
-          <label class="pick">
-            <input type="radio" name="engine" value="codex" disabled>
-            <span class="nm">Codex</span><span class="tag">не установлен · пока не поддержан</span>
-          </label>
-        </div>
-        <p class="note">Codex прочитает чек не хуже, но адаптер к нему ни разу не запускали
-           вживую. Отдать вам непроверенный режим было бы нечестно: сломавшись, он оставит
-           впечатление, что кривой весь проект.</p>
+        <div class="card" id="w-engines"></div>
+        <p class="note">Промпт, схема и все проверки у движков общие: страховка
+           от ошибок модели не может зависеть от того, чья модель ошиблась.
+           Различаются команда, способ передать картинку и модель. Установлены
+           оба — берите любой, переключить можно потом в один щелчок.</p>
       </div>
 
+      <!-- У «Дальше» нет data-go нарочно: переход делает скрипт, и только
+           после того, как сервер запомнил выбор. С data-go экран сменился бы
+           сразу, и человек ушёл бы на шаг 2 с движком, который никуда не
+           записался. -->
       <div class="nav">
-        <button class="bt big" type="button">Проверить снова</button>
-        <button class="bt go big grow" type="button" data-go="s-sheet">Дальше</button>
+        <button class="bt big" type="button" id="w-recheck">Проверить снова</button>
+        <button class="bt go big grow" type="button" id="w-engine-next">Дальше</button>
       </div>
     </section>
 
@@ -91,13 +87,22 @@
           </div>
           <pre><code>npm install -g @anthropic-ai/claude-code</code></pre>
         </div>
-        <p class="note">Выполните команду в терминале, дождитесь конца установки и нажмите
-           «Проверить снова». Если <code class="inline">npm</code> тоже не найден — сначала
-           поставьте Node.js с nodejs.org.</p>
+        <div class="code">
+          <div class="code-top">
+            <span>…или Codex</span>
+            <button class="bt copy" type="button">Скопировать</button>
+          </div>
+          <pre><code>npm install -g @openai/codex</code></pre>
+        </div>
+        <p class="note">Выполните любую из двух команд в терминале, дождитесь конца установки
+           и нажмите «Проверить снова». Хватит одного движка — второй ставить незачем. Если
+           <code class="inline">npm</code> тоже не найден — сначала поставьте Node.js
+           с nodejs.org.</p>
       </div>
 
       <div class="nav">
-        <button class="bt go big" type="button" data-go="s-engine">Проверить снова</button>
+        <button class="bt go big" type="button" id="w-noengine-recheck"
+                data-go="s-engine">Проверить снова</button>
       </div>
     </section>
 
