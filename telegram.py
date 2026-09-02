@@ -20,10 +20,21 @@ def call(token, method, **params):
         API.format(token=token, method=method), json=params,
         timeout=POLL_SECONDS + 35,
     )
-    response.raise_for_status()
-    answer = response.json()
+    # Тело читаем прежде, чем смотреть на код ответа, и raise_for_status()
+    # не зовём. Её текст выглядит так: «404 Client Error: Not Found for url:
+    # https://api.telegram.org/bot<ТОКЕН>/getMe» — и он показывается человеку
+    # на странице, в плашке «Телеграм не принял этот токен». Читать там
+    # нечего, зато токен, который человек только что вставил, уезжает
+    # обратно на экран. У телеграма на этот случай есть своё слово: он
+    # отвечает JSON-ом с description и на отказе тоже.
+    try:
+        answer = response.json()
+    except ValueError:
+        raise RuntimeError(f"телеграм ответил не по-человечески "
+                           f"(код {response.status_code})")
     if not answer.get("ok"):
-        raise RuntimeError(answer.get("description", "телеграм ответил не ok"))
+        raise RuntimeError(answer.get("description")
+                           or f"телеграм отказал (код {response.status_code})")
     return answer["result"]
 
 
