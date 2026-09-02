@@ -5,7 +5,6 @@
 Разбор — общий для обоих каналов, он живёт в intake.py.
 """
 
-import json
 import queue
 import threading
 import time
@@ -85,21 +84,32 @@ def download_photo(token, photo, sender):
     return intake.save_photo(response.content, sender)
 
 
-def knock(env, st, message):
-    """Чужому отвечаем один раз и молчим дальше.
+def knock(env, message):
+    """Чужому отвечаем один раз и запоминаем его в «стучались».
 
-    В терминал печатается готовая строка для settings.json: в срезе 3 то же
-    самое будет делать панель кнопкой «Впустить»."""
+    Настройки перечитываются здесь заново, хотя вызывающий их уже читал:
+    между тем чтением и этой строкой хозяин мог нажать «Впустить», и тогда
+    человеку незачем слышать отказ.
+
+    Числовой id хранится, но на экран не попадает никогда: показываем ник, а
+    если ника нет — имя из профиля и пометку. Ник в телеграме заводить
+    необязательно, и человек без ника не должен выглядеть сломанной строкой."""
     sender = message.get("from", {})
     sender_id = sender.get("id")
-    if sender_id in st["refused"]:
+    settings = config.load_settings()
+    if sender_id in config.allowed_ids(settings):
         return
-    st["refused"].append(sender_id)
-    line = {"id": sender_id, "username": sender.get("username", ""),
-            "name": sender.get("first_name", "")}
-    print(f"постучался чужой: {who(message)}")
-    print("  впустить — добавьте эту строку в settings.json, в список allowed:")
-    print("  " + json.dumps(line, ensure_ascii=False))
+    knocked = settings.get("knocked", [])
+    if any(str(person.get("id")) == str(sender_id) for person in knocked):
+        return
+    knocked.append({"id": sender_id,
+                    "username": sender.get("username", ""),
+                    "name": sender.get("first_name", ""),
+                    "at": time.time()})
+    settings["knocked"] = knocked
+    config.save_settings(settings)
+    print(f"постучался чужой: {who(message)} — впустите его в сайдбаре, "
+          "раздел «Кто может писать»")
     say(env["bot_token"], message["chat"]["id"],
         "Этот бот записывает расходы своего хозяина. "
         "Если он вас ждёт — передайте ему, что вы написали.")
@@ -114,7 +124,7 @@ def admit(env, st, jobs, message):
     chat_id = message["chat"]["id"]
     author = who(message)
     if message.get("from", {}).get("id") not in config.allowed_ids(settings):
-        knock(env, st, message)
+        knock(env, message)
         return
 
     incoming = extract(message)
@@ -133,7 +143,11 @@ def admit(env, st, jobs, message):
         return
 
     job = {"kind": incoming["kind"], "payload": "", "channel": "телеграм",
-           "author": author, "chat_id": chat_id, "file": "", "mark": "", "task": ""}
+           "author": author, "chat_id": chat_id,
+           # Идентификатор нужен разбору: он проверит белый список ещё раз,
+           # уже перед вызовом движка.
+           "user_id": message.get("from", {}).get("id"),
+           "file": "", "mark": "", "task": ""}
 
     if incoming["kind"] == "фото":
         mark = incoming["photo"]["file_unique_id"]

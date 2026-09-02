@@ -108,6 +108,44 @@ def create(env, st, jobs, blocked=""):
                "author": author, "chat_id": None, "file": "", "mark": ""}
         return jsonify(published(start(jobs, job, {"kind": "мой", "text": text})))
 
+    @app.post("/api/people/allow")
+    def allow():
+        """Впустить постучавшегося.
+
+        Строка переезжает из «стучались» в белый список, а не копируется:
+        человек не может быть в двух списках сразу, и глазами это должно быть
+        видно сразу же."""
+        wanted = str((request.get_json(silent=True) or {}).get("id", ""))
+        settings = config.load_settings()
+        knocked = settings.get("knocked", [])
+        found = [person for person in knocked if str(person.get("id")) == wanted]
+        if not found:
+            return jsonify(ok=False,
+                           error="этого человека уже нет среди стучавшихся")
+        settings["knocked"] = [person for person in knocked
+                               if str(person.get("id")) != wanted]
+        settings["allowed"] = settings.get("allowed", []) + [{
+            "id": found[0]["id"],
+            "username": found[0].get("username", ""),
+            "name": found[0].get("name", ""),
+        }]
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
+    @app.post("/api/people/remove")
+    def remove():
+        """Убрать из белого списка.
+
+        В «стучались» человека не возвращаем: он ничего не сделал, чтобы туда
+        попасть заново, а строка с кнопкой «Впустить» выглядела бы как
+        приглашение передумать. Напишет ещё раз — появится сам."""
+        wanted = str((request.get_json(silent=True) or {}).get("id", ""))
+        settings = config.load_settings()
+        settings["allowed"] = [person for person in settings.get("allowed", [])
+                               if str(person.get("id")) != wanted]
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
     return app
 
 

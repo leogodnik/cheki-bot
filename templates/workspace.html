@@ -5,16 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Чеки — рабочее место</title>
 <link rel="stylesheet" href="/static/style.css">
-<style>
-  /* Правильная правка тут — одна строка в style.css: .nv[hidden] { display: none; }
-     Но тот файл не наш: владелец его закрыл для правок. .nv сама объявляет
-     display: flex, а это авторское правило старше браузерного [hidden], поэтому
-     три скрытых пункта сайдбара («Кто может писать», «Телеграм», «Движок») были
-     видны. Здесь — та же строка, но в файле, который можно трогать. Атрибут
-     hidden в разметке ниже остаётся смысловой пометкой: срез 4 снимет его, и
-     пункты сами появятся без правки этого блока. */
-  .nv[hidden] { display: none; }
-</style>
 </head>
 <body class="fixed">
 
@@ -27,9 +17,8 @@
 
   Здесь пустой скелет: всё содержимое ленты и записей сайдбара наполняет
   /static/app.js, опрашивая /api/events раз в три секунды. Выдуманные данные
-  остались только в скрытых панелях («Кто может писать», «Телеграм», «Движок») —
-  они оживут в срезе 4, а до тех пор людей, бота и версии движка в них показывать
-  некому.
+  остались только в панелях «Телеграм» и «Движок» — они оживут дальше в том же
+  срезе 4.
 -->
 
 <svg style="display:none" aria-hidden="true">
@@ -69,15 +58,15 @@
       <svg class="ic"><use href="#i-table"/></svg>Таблица<span class="r"></span>
     </a>
 
-    <button class="nv" type="button" id="nav-people" data-pane="people" hidden>
+    <button class="nv" type="button" id="nav-people" data-pane="people">
       <svg class="ic"><use href="#i-users"/></svg>Кто может писать<span class="r"></span>
     </button>
 
-    <button class="nv" type="button" id="nav-telegram" data-pane="telegram" hidden>
+    <button class="nv" type="button" id="nav-telegram" data-pane="telegram">
       <svg class="ic"><use href="#i-send"/></svg>Телеграм<span class="dot off"></span>
     </button>
 
-    <button class="nv" type="button" id="nav-engine" data-pane="engine" hidden>
+    <button class="nv" type="button" id="nav-engine" data-pane="engine">
       <svg class="ic"><use href="#i-cpu"/></svg>Движок<span class="r"></span>
     </button>
 
@@ -161,12 +150,15 @@
            телеграму: бот отвечает только тем, кто здесь есть.</p>
 
         <div class="card">
-          <div class="row"><span class="k">Леонид Годник</span><span class="v nick">@leogodnik</span><button class="bt" type="button">Убрать</button></div>
-          <div class="row"><span class="k">Ольга Кузнецова</span><span class="v noname">ника нет</span><button class="bt" type="button">Убрать</button></div>
-          <div class="sec-h">Стучались, но не впущены</div>
-          <div class="row"><span class="k">Иван Соколов</span><span class="nick">@sokolov_i</span><span class="v stamp">вчера, 14:20</span><button class="bt go" type="button">Впустить</button></div>
-          <div class="row"><span class="k">Мария П.</span><span class="noname">ника нет</span><span class="v stamp">сегодня, 09:41</span><button class="bt go" type="button">Впустить</button></div>
+          <div id="allowed"></div>
+          <div class="sec-h" id="knocked-head" hidden>Стучались, но не впущены</div>
+          <div id="knocked"></div>
         </div>
+
+        <p class="note" id="people-none" hidden>
+          Пока никого. Список нужен телеграму: пока он не подключён, писать
+          боту некому.
+        </p>
 
         <p class="note">Ник в телеграме заводить необязательно: есть — показываем его, нет —
            имя из профиля и пометку. Числовой идентификатор не показываем никогда, хотя

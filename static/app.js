@@ -123,6 +123,23 @@
     return node;
   }
 
+  /* Отправка настройки. Ответ несёт свежий снимок состояния, и сайдбар
+     перерисовывается им сразу, не дожидаясь ближайшего опроса: три секунды
+     между нажатием и результатом ощущаются как поломка, и человек жмёт второй
+     раз. */
+  function post(path, body) {
+    return fetch(path, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(body || {})
+    })
+      .then(function (response) { return response.json(); })
+      .then(function (answer) {
+        if (answer.state) paint(answer.state);
+        return answer;
+      });
+  }
+
   /* Иконку рисуем ссылкой на <symbol> в шапке страницы — те же значки, что
      в эталоне. className у SVG только для чтения, поэтому setAttribute. */
   function icon(name) {
@@ -418,8 +435,8 @@
   }
 
   /* Сайдбар. Здесь только то, что уже посчитано где-то ещё: имя из настроек,
-     статьи из кэша справочника, движок из settings.json. Управление ими —
-     срез 4, до тех пор их пункты в разметке скрыты. */
+     статьи из кэша справочника, движок и белый список из settings.json.
+     Источник один — снимок состояния, приезжающий с каждым опросом ленты. */
   function paint(state) {
     greeting.textContent = state.owner
       ? "Что записываем, " + state.owner + "?"
@@ -440,6 +457,57 @@
     document.querySelectorAll(".engine-badge").forEach(function (badge) {
       badge.textContent = state.engine;
     });
+
+    drawPeople(state);
+  }
+
+  /* Одна строка списка. Ник показываем, когда он есть; когда нет — имя из
+     профиля и пометку «ника нет»: заводить ник в телеграме необязательно.
+
+     Числовой идентификатор не показывается никогда, хотя работает бот именно
+     по нему. Он живёт в замыкании кнопки и уезжает обратно на сервер. */
+  function person(record, label, path, hot) {
+    var row = el("div", "row");
+    row.appendChild(el("span", "k", record.name || "без имени"));
+    row.appendChild(record.username
+      ? el("span", "v nick", "@" + record.username)
+      : el("span", "v noname", "ника нет"));
+    var button = el("button", "bt" + (hot ? " go" : ""), label);
+    button.type = "button";
+    button.addEventListener("click", function () {
+      /* Пока сервер думает, второе нажатие впустило бы человека дважды. */
+      button.disabled = true;
+      post(path, {id: record.id}).then(function (answer) {
+        if (!answer.ok) button.disabled = false;
+      });
+    });
+    row.appendChild(button);
+    return row;
+  }
+
+  /* Раздел «Кто может писать» целиком. Источник один — снимок состояния;
+     второго списка людей на клиенте нет и быть не должно. */
+  function drawPeople(state) {
+    var allowed = document.getElementById("allowed");
+    var knocked = document.getElementById("knocked");
+    allowed.textContent = "";
+    knocked.textContent = "";
+
+    (state.allowed || []).forEach(function (record) {
+      allowed.appendChild(person(record, "Убрать", "/api/people/remove", false));
+    });
+    (state.knocked || []).forEach(function (record) {
+      knocked.appendChild(person(record, "Впустить", "/api/people/allow", true));
+    });
+
+    document.getElementById("knocked-head").hidden = !(state.knocked || []).length;
+    document.getElementById("people-none").hidden =
+      (state.allowed || []).length + (state.knocked || []).length > 0;
+
+    var count = document.querySelector("#nav-people .r");
+    count.textContent = (state.knocked || []).length
+      ? (state.allowed || []).length + " · стучится " + state.knocked.length
+      : String((state.allowed || []).length || "");
   }
 
   /* Список того, что записано сегодня. Собирается из тех же событий, что и
