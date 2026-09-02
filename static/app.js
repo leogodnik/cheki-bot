@@ -199,10 +199,15 @@
      папки «чеки», поэтому превью переживает перезагрузку страницы. */
   function mine(event) {
     var box = el("div", "u");
-    if (event.photo) {
+    /* Адрес у бота есть не всегда: повтор он опознаёт до записи на диск, и
+       отдавать ему нечего. Тогда показываем свою копию — ту, что браузер
+       только что отправил. Она живёт до перезагрузки страницы, после неё у
+       такого пузыря останется имя, как раньше. */
+    var src = event.photo ? "/photo/" + encodeURIComponent(event.photo) : event.pic;
+    if (src) {
       box.className = "u pic";
       var img = el("img");
-      img.src = "/photo/" + encodeURIComponent(event.photo);
+      img.src = src;
       img.alt = "Фотография чека, которую прислали";
       /* Картинка приходит после разметки и меняет высоту пузыря — лента
          должна остаться прокрученной вниз. */
@@ -530,10 +535,21 @@
   /* Отправка возвращается сразу, с плашкой «Смотрю чек…». Ответ приедет
      опросом. Вернувшиеся события показываем немедленно, чтобы поле не
      выглядело мёртвым три секунды. */
-  function send(form) {
+  function send(form, pic) {
     fetch("/api/say", {method: "POST", body: form})
       .then(function (response) { return response.json(); })
-      .then(receive)
+      .then(function (answer) {
+        /* Свою копию отдаём только той реплике, которая приехала ответом на
+           эту отправку: у каждого файла свой запрос и свой ответ, поэтому
+           перепутать нельзя. Если бот файл сохранил, у события есть photo, и
+           наша копия не нужна — с диска картинка переживёт перезагрузку. */
+        if (pic) {
+          (answer.events || []).forEach(function (event) {
+            if (event.kind === "мой" && !event.photo) event.pic = pic;
+          });
+        }
+        receive(answer);
+      })
       .catch(function () {
         place({id: 0, kind: "слово", text: "Бот не отвечает.",
                note: "Проверьте окно терминала, в котором он запущен."});
@@ -566,15 +582,52 @@
     });
   });
 
+  /* У картинки из буфера имени может не быть вовсе, а бот по имени решает,
+     фотография это или нет. Даём имя по типу — тому самому, который браузер
+     о картинке и сообщает. */
+  var PASTED = {"image/png": "вставка.png", "image/jpeg": "вставка.jpg"};
+
   /* Файлы уходят по одному: в очереди разбора всё равно один за другим, а
      отдельным заданием каждый получает свою плашку и свою строку в ленте. */
   function sendFiles(list) {
     Array.prototype.forEach.call(list, function (file) {
       var form = new FormData();
-      form.append("file", file, file.name);
-      send(form);
+      form.append("file", file, file.name || PASTED[file.type] || "вставка.png");
+      /* Копия для превью делается здесь же: у бота файла может и не оказаться. */
+      send(form, URL.createObjectURL(file));
     });
   }
+
+  /* Картинки из буфера обмена. Чек чаще всего именно там: сняли на телефон,
+     переслали себе, скопировали — перетаскивать нечего.
+
+     Слушаем документ, а не поле ввода: целиться курсором в поле перед
+     вставкой человек не обязан. Текст при этом вставляется как обычно —
+     мы вмешиваемся, только когда в буфере есть картинка. */
+  function pasted(data) {
+    var found = [];
+    Array.prototype.forEach.call(data.files || [], function (file) {
+      if (file.type.indexOf("image/") === 0) found.push(file);
+    });
+    if (found.length) return found;
+    /* Запасной путь: кое-где картинка лежит только в items и становится
+       файлом по запросу. */
+    Array.prototype.forEach.call(data.items || [], function (item) {
+      if (item.kind === "file" && item.type.indexOf("image/") === 0) {
+        var file = item.getAsFile();
+        if (file) found.push(file);
+      }
+    });
+    return found;
+  }
+
+  document.addEventListener("paste", function (event) {
+    if (!event.clipboardData) return;
+    var found = pasted(event.clipboardData);
+    if (!found.length) return;
+    event.preventDefault();   /* иначе в поле ввода прилетит имя файла */
+    sendFiles(found);
+  });
 
   /* Браузер шлёт dragleave и на переходе между вложенными элементами, поэтому
      считаем входы и выходы, а не гасим подсветку на первом же dragleave —
