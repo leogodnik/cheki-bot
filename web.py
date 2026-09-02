@@ -146,6 +146,25 @@ def create(env, st, jobs, blocked=""):
         config.save_settings(settings)
         return jsonify(ok=True, state=snapshot(env, st, blocked))
 
+    @app.post("/api/engine")
+    def engine():
+        """Переключить движок.
+
+        Проверяем две вещи: что такой движок вообще есть за швом и что он
+        отвечает в терминале. Второе важнее: записать в settings.json движок,
+        которого нет, — значит получить отказ на каждом следующем чеке, и
+        человек будет искать причину в чеке."""
+        wanted = (request.get_json(silent=True) or {}).get("engine", "")
+        if wanted not in agent.ENGINES:
+            return jsonify(ok=False, error="такого движка нет")
+        if not agent.versions().get(wanted):
+            return jsonify(ok=False,
+                           error=f"{agent.TITLES[wanted]} не отвечает в терминале")
+        settings = config.load_settings()
+        settings["engine"] = wanted
+        config.save_settings(settings)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
+
     return app
 
 
@@ -166,6 +185,7 @@ def snapshot(env, st, blocked):
         # ввода, и переименовать его значит без нужды тронуть чужой код.
         "engine_key": settings["engine"],
         "engines": agent.versions(),
+        "titles": agent.TITLES,
         "allowed": settings.get("allowed", []),
         "knocked": settings.get("knocked", []),
         "telegram": bool(env["bot_token"]),

@@ -151,6 +151,9 @@ def accept(env, st, job):
         "amount": amount,
         "currency": answer["currency"],
         "category": verdict["category"],
+        # Чем разобрано. Не ключ, а название: событие уезжает и в чат, и в
+        # браузер, и там и там его читает человек.
+        "engine": agent.TITLES.get(settings["engine"], settings["engine"]),
         "payment": answer["payment"],
         "date": answer["date"],
         "row": number,

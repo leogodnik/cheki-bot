@@ -394,7 +394,8 @@
       sub.appendChild(el("span", "warn", trouble[0]));
       sub.appendChild(document.createTextNode(" — "));
     } else {
-      var facts = join([event.category, PAYMENTS[event.payment], day(event.date)]);
+      var facts = join([event.category, PAYMENTS[event.payment], day(event.date),
+                        event.engine]);
       sub.appendChild(document.createTextNode(facts ? facts + " — " : ""));
     }
     if (event.row) {
@@ -459,6 +460,44 @@
     });
 
     drawPeople(state);
+    drawEngine(state);
+  }
+
+  /* Переключатель движка. Строится из того же ответа, что и первый шаг
+     мастера: список движков и версия у каждого. Пустая версия значит «не
+     установлен» — точку гасим и не даём нажать. */
+  function drawEngine(state) {
+    var card = document.getElementById("engine-picks");
+    card.textContent = "";
+
+    Object.keys(state.engines || {}).forEach(function (key) {
+      var version = state.engines[key];
+      var pick = el("label", "pick");
+      var dot = document.createElement("input");
+      dot.type = "radio";
+      dot.name = "engine";
+      dot.value = key;
+      dot.checked = key === state.engine_key;
+      dot.disabled = !version;
+      dot.addEventListener("change", function () { post("/api/engine", {engine: key}); });
+      pick.appendChild(dot);
+      pick.appendChild(el("span", "nm", state.titles[key] || key));
+      pick.appendChild(el("span", "tag", version || "не установлен"));
+      card.appendChild(pick);
+    });
+
+    /* Выбранный движок мог исчезнуть после установки: переименовали, снесли,
+       сменили PATH. Выбор человека при этом не гасим — не наше дело менять
+       его молча, — но сказать, что читать чеки сейчас нечем, обязаны.
+       Терракота значит «взгляни», и это ровно тот случай. */
+    var gone = document.getElementById("engine-gone");
+    var missing = state.engine_key && !(state.engines || {})[state.engine_key];
+    gone.hidden = !missing;
+    if (missing) {
+      gone.querySelector("span").textContent =
+        state.engine + " не отвечает в терминале. Чеки сейчас не разбираются: "
+        + "поставьте его заново или выберите другой движок.";
+    }
   }
 
   /* Одна строка списка. Ник показываем, когда он есть; когда нет — имя из
