@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import checks
 import feed
 import state
+import web
 
 passed = 0
 failed = []
@@ -108,6 +109,23 @@ for number in range(feed.LIMIT + 50):
 fresh, last = feed.since(0)
 check("лента не растёт бесконечно", len(fresh) == feed.LIMIT)
 check("выкидывается старое, а не новое", fresh[-1]["text"] == str(feed.LIMIT + 49))
+
+feed.forget()
+
+print()
+print("published() — ответ отправки из браузера")
+
+feed.forget()
+foreign = feed.add({"kind": "слово", "text": "мимо страницы"})
+mine = feed.add({"kind": "мой", "text": "моё"})
+result = web.published([mine])
+check("курсор всегда 0 — /api/say не знает, что страница уже видела",
+      result["last"] == 0)
+check("события отдаются как есть, свои не путаются с чужими",
+      result["events"] == [mine])
+check("метка жизни едет вместе с ответом", result["life"] == feed.LIFE)
+check("пустой список событий не роняет функцию",
+      web.published([])["last"] == 0)
 
 feed.forget()
 
