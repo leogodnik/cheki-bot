@@ -16,7 +16,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from engines import EngineError
+from engines import EngineError, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -40,8 +40,14 @@ def run(kind, task, payload=None):
     строкой внутри задания, и модель открывает файл сама инструментом Read.
     Аргумент есть потому, что Codex берёт картинку отдельным флагом, а шов
     зовёт оба движка одинаково."""
+    program = resolve(COMMAND)
+    if not program:
+        raise EngineError(
+            "не нашёл claude — проверьте, что Claude Code установлен и "
+            "виден в PATH (запустите claude --version)"
+        )
     command = [
-        "claude",
+        program,
         "-p", task,
         "--append-system-prompt", PROMPT_PATH.read_text(encoding="utf-8"),
         "--json-schema", SCHEMA_PATH.read_text(encoding="utf-8"),

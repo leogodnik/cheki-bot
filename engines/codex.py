@@ -32,7 +32,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from engines import EngineError
+from engines import EngineError, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -65,8 +65,14 @@ def run(kind, task, payload):
 
     with tempfile.TemporaryDirectory() as folder:
         answer_path = Path(folder) / "answer.json"
+        program = resolve(COMMAND)
+        if not program:
+            raise EngineError(
+                "не нашёл codex — проверьте, что Codex CLI установлен "
+                "(npm install -g @openai/codex) и виден в PATH"
+            )
         command = [
-            "codex", "exec",
+            program, "exec",
             # Проект у ученика может лежать не под гитом — без этого codex
             # откажется работать.
             "--skip-git-repo-check",

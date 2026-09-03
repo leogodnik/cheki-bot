@@ -22,7 +22,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from engines import EngineError, claude_code, codex
+from engines import EngineError, claude_code, codex, resolve
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -133,9 +133,18 @@ def version_of(command):
     она именно открытая — команда ждёт EOF без конца. Наследие разведки
     2 сентября, где так зависли два прогона по семь и десять минут.
 
-    subprocess только списком аргументов — правило среза 1, здесь тоже."""
+    subprocess только списком аргументов — правило среза 1, здесь тоже.
+
+    Имя команды сначала превращаем в путь: на Windows движок стоит как
+    `claude.cmd`, и subprocess по голому имени его не найдёт. Подробности —
+    в engines/resolve(). Из всех трёх мест это самое дорогое: отсюда мастер
+    берёт ответ на вопрос «что у вас установлено», и пустая строка здесь
+    заворачивает человека на первом же шаге."""
+    program = resolve(command)
+    if not program:
+        return ""
     try:
-        done = subprocess.run([command, "--version"], capture_output=True,
+        done = subprocess.run([program, "--version"], capture_output=True,
                               text=True, timeout=5,
                               stdin=subprocess.DEVNULL)
     except (OSError, subprocess.SubprocessError):
