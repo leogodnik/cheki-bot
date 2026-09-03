@@ -16,7 +16,7 @@ import feed
 import intake
 import state as memory
 import web
-from telegram import POLL_SECONDS, call
+from telegram import POLL_SECONDS, call, check_token
 
 
 def get_updates(token, offset):
@@ -241,9 +241,34 @@ def telegram_loop(env, st, jobs):
         if not token:
             time.sleep(2)
             continue
+        remember_nick(token)
         print("Телеграм: жду сообщений.")
         poll_with(env, st, jobs, token)
         print("Телеграм: опрос остановлен — бота заменили или отключили.")
+
+
+def remember_nick(token):
+    """Ник подключённого бота в settings.json, если его там ещё нет.
+
+    Нужен он одному месту — ссылке t.me в разделе «Доступ», которую хозяин
+    отправляет новому человеку. Мастер установки и «Подключить бота» ник
+    пишут сами, но .env, набитый руками по README, оставляет поле пустым —
+    и собрать адрес было бы не из чего.
+
+    Спрашиваем один раз на запуск опроса, а не на каждом витке: имя бота
+    меняется раз в год, а getUpdates ходит каждые полминуты. Не ответил
+    телеграм — молчим и работаем дальше: страница на этот случай говорит,
+    что ссылки пока нет, а останавливать из-за неё приём чеков не за что.
+    """
+    settings = config.load_settings()
+    if settings.get("bot"):
+        return
+    try:
+        settings["bot"] = check_token(token)
+    except Exception as error:
+        print(f"не спросил имя бота ({error}) — ссылки в «Доступе» не будет")
+        return
+    config.save_settings(settings)
 
 
 def poll_with(env, st, jobs, token):

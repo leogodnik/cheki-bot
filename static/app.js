@@ -622,6 +622,50 @@
     return row;
   }
 
+  /* Копирование ссылки на бота. Тот же способ, что в мастере установки:
+     сначала современный буфер обмена, а если страница открыта так, что он
+     недоступен, — старый через выделение. Провалились оба — говорим об этом
+     кнопкой, а не молчим: человек ушёл бы вставлять пустоту.
+
+     Обработчик вешается один раз, при загрузке. Кнопка стоит в разметке и
+     живёт всё время — drawPeople() её не пересобирает. */
+  var inviteCopy = document.getElementById("invite-copy");
+
+  inviteCopy.addEventListener("click", function () {
+    var text = document.getElementById("invite-link").textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(
+        function () { said("Скопировано", 1600); },
+        /* Отказ приезжает отклонённым обещанием — например, когда браузер не
+           дал разрешения. Сдаваться на этом рано: старый способ такого
+           разрешения не спрашивает и часто срабатывает там, где новый отказал. */
+        function () { oldWay(text); });
+      return;
+    }
+    oldWay(text);
+  });
+
+  /* Старый способ: невидимое поле, выделение, копирование. */
+  function oldWay(text) {
+    var pad = document.createElement("textarea");
+    pad.value = text;
+    pad.style.position = "fixed";
+    pad.style.opacity = "0";
+    document.body.appendChild(pad);
+    pad.select();
+    var done = false;
+    try { done = document.execCommand("copy"); } catch (e) { done = false; }
+    document.body.removeChild(pad);
+    said(done ? "Скопировано" : "Выделите вручную", done ? 1600 : 2200);
+  }
+
+  /* Ответ кнопки на своё же нажатие. Ширину кнопка при этом меняет — терпимо:
+     она стоит у правого края карточки, и двигать ей нечего. */
+  function said(word, hold) {
+    inviteCopy.textContent = word;
+    setTimeout(function () { inviteCopy.textContent = "Скопировать"; }, hold);
+  }
+
   /* Раздел «Доступ» целиком. Источник один — снимок состояния;
      второго списка людей на клиенте нет и быть не должно. */
   function drawPeople(state) {
@@ -636,6 +680,29 @@
     (state.knocked || []).forEach(function (record) {
       knocked.appendChild(person(record, "Впустить", "/api/people/allow", true));
     });
+
+    /* Ссылка на бота — то, что отправляют новому человеку, чтобы он постучался.
+       Показываем, только когда есть чем: без ника адреса t.me не собрать.
+
+       Причина, по которой ссылки нет, у двух состояний разная, и общей фразой
+       их не покрыть. Не подключён бот — это дело поправимое кнопкой рядом.
+       Подключён, но безымянный — телеграм не ответил на вопрос «как его
+       зовут» при запуске, и кнопка в «Телеграм» тут ничем не поможет. */
+    var invite = document.getElementById("invite");
+    invite.hidden = !(state.telegram && state.bot);
+    document.getElementById("invite-none").hidden = !invite.hidden;
+
+    if (invite.hidden) {
+      document.getElementById("invite-go").hidden = Boolean(state.telegram);
+      document.getElementById("invite-why").textContent = state.telegram
+        ? "Ссылки пока нет: телеграм не сказал, как зовут бота. Перезапустите "
+          + "бота — он спросит ещё раз, и ссылка появится."
+        : "Ссылки пока нет: бот не подключён. Заведите его у @BotFather и "
+          + "вставьте строку в разделе «Телеграм» — тогда будет что отправить.";
+    } else {
+      document.getElementById("invite-link").textContent =
+        "https://t.me/" + state.bot;
+    }
 
     document.getElementById("knocked-head").hidden = !(state.knocked || []).length;
     document.getElementById("people-none").hidden =
