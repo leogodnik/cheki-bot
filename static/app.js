@@ -635,7 +635,7 @@
     var text = document.getElementById("invite-link").textContent;
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(
-        function () { said("Скопировано", 1600); },
+        function () { flash("Скопировано", 1600); },
         /* Отказ приезжает отклонённым обещанием — например, когда браузер не
            дал разрешения. Сдаваться на этом рано: старый способ такого
            разрешения не спрашивает и часто срабатывает там, где новый отказал. */
@@ -656,12 +656,12 @@
     var done = false;
     try { done = document.execCommand("copy"); } catch (e) { done = false; }
     document.body.removeChild(pad);
-    said(done ? "Скопировано" : "Выделите вручную", done ? 1600 : 2200);
+    flash(done ? "Скопировано" : "Выделите вручную", done ? 1600 : 2200);
   }
 
   /* Ответ кнопки на своё же нажатие. Ширину кнопка при этом меняет — терпимо:
      она стоит у правого края карточки, и двигать ей нечего. */
-  function said(word, hold) {
+  function flash(word, hold) {
     inviteCopy.textContent = word;
     setTimeout(function () { inviteCopy.textContent = "Скопировать"; }, hold);
   }
