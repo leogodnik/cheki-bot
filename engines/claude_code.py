@@ -16,7 +16,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from engines import EngineError, resolve
+from engines import EngineError, EngineTimeout, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -27,7 +27,13 @@ MODELS = {"фото": "sonnet", "текст": "haiku"}
 # Имя команды в терминале. Отсюда его берёт agent.versions(), чтобы спросить
 # версию, — а не из строки, вписанной в третьем месте.
 COMMAND = "claude"
-TIMEOUT = 180
+# Пять минут — и это оценка, а не замер. Что известно точно: 180 секунд мало,
+# 5 сентября два боевых прогона из двух упёрлись ровно в них. Самый лёгкий
+# случай — текст на haiku, без справочника — прошёл за 125 секунд, а боевое
+# задание тяжелее на 17 статей справочника, и фотографии идут на sonnet.
+# Отсюда 300: с запасом от известного низа. Когда дойдут руки прогнать текст
+# и фото с секундомером — заменить на замеренное число.
+TIMEOUT = 300
 
 
 def run(kind, task, payload=None):
@@ -61,7 +67,7 @@ def run(kind, task, payload=None):
             command, capture_output=True, text=True, timeout=TIMEOUT, cwd=BASE_DIR
         )
     except subprocess.TimeoutExpired:
-        raise EngineError(f"движок молчал {TIMEOUT} секунд")
+        raise EngineTimeout(f"движок молчал {TIMEOUT} секунд")
     except OSError as error:
         # Чаще всего это FileNotFoundError: claude не установлен или не
         # виден в PATH. Без этого человек получит «Смотрю чек…» и тишину.

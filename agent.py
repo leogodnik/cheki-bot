@@ -22,7 +22,7 @@ import time
 from datetime import date
 from pathlib import Path
 
-from engines import EngineError, claude_code, codex, resolve
+from engines import EngineError, EngineTimeout, claude_code, codex, resolve
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -51,15 +51,23 @@ class AgentError(Exception):
 def parse(kind, payload, categories, today, engine="claude_code"):
     """kind — «фото» или «текст», payload — путь к файлу или текст сообщения.
 
-    Одна повторная попытка: вызов иногда отваливается по таймауту, а второй
-    заход обычно проходит. Больше двух не пробуем — каждый стоит около
-    33 тысяч токенов подписки."""
+    Одна повторная попытка: сорванная схема, пустой structured_output и битый
+    JSON на втором заходе обычно проходят. Больше двух не пробуем — каждый
+    стоит около 33 тысяч токенов подписки.
+
+    Таймаут из повтора исключён. Движок не сломался — он не успел, и второй
+    заход с тем же лимитом упирается в тот же лимит: 5 сентября так вышло
+    2 раза из 2. Плата за такой повтор — двойное ожидание ради того же
+    отказа: человек ждёт шесть минут вместо трёх и получает то же самое."""
     if engine not in ENGINES:
         raise AgentError(f"движок «{engine}» пока не поддержан")
     task = build_task(kind, payload, categories, today)
     for attempt in (1, 2):
         try:
             return validate(ENGINES[engine].run(kind, task, payload))
+        except EngineTimeout as error:
+            print(f"попытка {attempt}: {error} — не повторяю")
+            raise AgentError(str(error))
         except (EngineError, AgentError) as error:
             print(f"попытка {attempt} не удалась: {error}")
             if attempt == 2:

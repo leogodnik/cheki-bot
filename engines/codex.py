@@ -32,7 +32,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from engines import EngineError, resolve
+from engines import EngineError, EngineTimeout, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -44,7 +44,9 @@ MODELS = {"фото": "gpt-5.6-terra", "текст": "gpt-5.6-luna"}
 # версию, — а не из строки, вписанной в третьем месте.
 COMMAND = "codex"
 EFFORT = "low"
-TIMEOUT = 180
+# То же число и по той же причине, что в claude_code.py: 180 мало, 300 —
+# оценка с запасом. Codex с секундомером тоже не мерили.
+TIMEOUT = 300
 
 
 def run(kind, task, payload):
@@ -101,7 +103,7 @@ def run(kind, task, payload):
                 stdin=subprocess.DEVNULL, cwd=folder,
             )
         except subprocess.TimeoutExpired:
-            raise EngineError(f"движок молчал {TIMEOUT} секунд")
+            raise EngineTimeout(f"движок молчал {TIMEOUT} секунд")
         except OSError as error:
             # Чаще всего это FileNotFoundError: codex не установлен или не
             # виден в PATH. Без этого человек получит «Смотрю чек…» и тишину.
