@@ -10,6 +10,7 @@
 
 import sys
 import tempfile
+import time
 from datetime import date
 from pathlib import Path
 
@@ -442,6 +443,48 @@ check("сокращённый справочник — пускаем, но го
 код = setup.script_with_secret(секрет)
 check("секрет подставлен", секрет in код)
 check("заглушки в готовом коде не осталось", setup.PLACEHOLDER not in код)
+
+
+print()
+print("справочник перечитывается сам, без чека")
+
+# Число статей в сайдбаре — длина последнего прочитанного справочника. Читал
+# его только разбор чека, и человек, дописавший статью в таблицу, видел
+# прежнее число до самого следующего чека. Проверяем здесь не чтение таблицы,
+# а то, что открытая страница обновляет это число сама.
+среда = {"sheet_url": "http://пример/exec", "sheet_secret": "секрет"}
+живой = sheet.fetch_categories
+тихо = web.memory.save
+web.memory.save = lambda состояние: None
+try:
+    sheet.fetch_categories = lambda url, secret: ["Продукты", "Топливо"]
+    память = {"categories": ["Продукты"], "categories_at": 0}
+    поток = web.reread_categories(среда, память, 0)
+    if поток:
+        поток.join(timeout=10)
+    check("справочник перечитан — в сайдбаре новое число",
+          память["categories"] == ["Продукты", "Топливо"])
+
+    # Опрос ленты приходит раз в три секунды. Свежий кэш он трогать не должен,
+    # иначе к таблице выстроится очередь из двадцати запросов в минуту.
+    память = {"categories": ["Продукты"], "categories_at": time.time()}
+    check("кэш свежий — к таблице не идём",
+          web.reread_categories(среда, память, sheet.CACHE_SECONDS) is None)
+
+    # Оборванная сеть не повод показать человеку, что его справочник исчез.
+    def молчит(url, secret):
+        raise sheet.SheetError("таблица не ответила")
+
+    sheet.fetch_categories = молчит
+    память = {"categories": ["Продукты", "Топливо"], "categories_at": 0}
+    поток = web.reread_categories(среда, память, 0)
+    if поток:
+        поток.join(timeout=10)
+    check("таблица молчит — прежний список остаётся на месте",
+          память["categories"] == ["Продукты", "Топливо"])
+finally:
+    sheet.fetch_categories = живой
+    web.memory.save = тихо
 
 
 print()

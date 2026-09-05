@@ -10,6 +10,7 @@
 import logging
 import socket
 import sys
+import threading
 import time
 from pathlib import Path
 from uuid import uuid4
@@ -32,6 +33,22 @@ LAST_PORT = 8775
 # держать движок 50 секунд ради заведомо чужого файла незачем.
 MAX_FILE = 10 * 1024 * 1024
 PICTURES = (".jpg", ".jpeg", ".png")
+
+# Насколько свежим считается справочник, когда человек вернулся во вкладку.
+# Ушёл он туда, скорее всего, в таблицу, и вернуться мог с новой статьёй, —
+# но alt-tab туда-сюда редким событием не бывает, и без нижней границы каждый
+# щелчок по вкладкам поднимал бы запрос к Apps Script.
+REREAD_FLOOR = 15
+
+# Один перечитыватель справочника на весь процесс. Страница опрашивает ленту
+# раз в три секунды, а таблица отвечает секунд двадцать: без замка на один
+# просроченный кэш ушло бы семь запросов вместо одного.
+_REREAD = threading.Lock()
+
+# Когда к таблице ходили в последний раз — не когда прочитали. Разница важна,
+# только если таблица молчит: categories_at тогда не двигается, и без этой
+# отметки опрос ленты ломился бы в молчащий адрес непрерывно.
+_TRIED_AT = 0.0
 
 # Что сказать про каждый вид адреса. Тексты живут здесь, а не в setup.py:
 # там разбор, здесь разговор с человеком.
@@ -95,6 +112,9 @@ def create(env, st, jobs, blocked=""):
 
         Страница зовёт этот маршрут раз в три секунды. Вебсокетов нет
         намеренно: на локальном адресе опрос дешевле и понятнее на уроке."""
+        # Страница открыта — держим число статей в сайдбаре живым. Чтение
+        # идёт в фоне и ответ не задерживает.
+        reread_categories(env, st, sheet.CACHE_SECONDS)
         after = request.args.get("after", default=0, type=int)
         life = request.args.get("life", default="", type=str)
         fresh, last = feed.since(after, life)
@@ -109,6 +129,16 @@ def create(env, st, jobs, blocked=""):
         лента: событий у него нет и быть не может, а таскать их ради трёх
         строк сводки незачем."""
         return jsonify(state=snapshot(env, st, blocked))
+
+    @app.post("/api/sheet/reread")
+    def sheet_reread():
+        """Перечитать справочник статей сейчас, не дожидаясь конца кэша.
+
+        Зовёт страница, когда человек вернулся во вкладку: ушёл он обычно в
+        таблицу, и вернуться мог с дописанной статьёй. Ответ уходит сразу, до
+        чтения, — новое число приедет ближайшим опросом ленты."""
+        reread_categories(env, st, REREAD_FLOOR)
+        return jsonify(ok=True, state=snapshot(env, st, blocked))
 
     @app.get("/api/engines")
     def engines():
@@ -341,12 +371,58 @@ def create(env, st, jobs, blocked=""):
     return app
 
 
+def reread_categories(env, st, older_than):
+    """Перечитать справочник статей у таблицы, если прочитанному больше
+    older_than секунд. Отдаёт запущенный поток — или None, когда идти незачем.
+
+    Число в пункте «Таблица» — это длина последнего прочитанного справочника,
+    а читал его до сих пор только разбор чека. Человек, дописавший статью в
+    таблицу, видел в сайдбаре прежнее число до самого следующего чека — и
+    справедливо считал, что бот его правку не заметил. Читает теперь и
+    открытая страница, сама, между делом.
+
+    Своим потоком, потому что маршрут, из которого зовут, отвечает странице
+    за миллисекунды, а Apps Script — за двадцать секунд. Новое число сайдбар
+    подхватит ближайшим опросом.
+
+    Молчание таблицы и пустой лист прежний список не трогают: показать ноль
+    статей из-за оборванной сети значит сказать человеку, что его справочник
+    пропал."""
+    global _TRIED_AT
+    if not env["sheet_url"] or not env["sheet_secret"]:
+        return None
+    now = time.time()
+    if now - max(st["categories_at"], _TRIED_AT) < older_than:
+        return None
+    # Не дождались замка — значит, чтение уже идёт, и второе ни к чему.
+    if not _REREAD.acquire(blocking=False):
+        return None
+    _TRIED_AT = now
+
+    def read():
+        try:
+            found = sheet.fetch_categories(env["sheet_url"], env["sheet_secret"])
+            st["categories"] = found
+            st["categories_at"] = time.time()
+            memory.save(st)
+        except Exception as error:
+            print(f"справочник не перечитался ({error}) — оставляю прежний список")
+        finally:
+            _REREAD.release()
+
+    thread = threading.Thread(target=read, daemon=True)
+    thread.start()
+    return thread
+
+
 def snapshot(env, st, blocked):
     """Состояние для сайдбара. Едет с каждым ответом опроса — так сайдбар не
     может разъехаться с лентой.
 
     Число статей берётся из кэша в state.json, а не из таблицы: опрос идёт
-    раз в три секунды, и дёргать Apps Script на каждый заход незачем."""
+    раз в три секунды, и дёргать Apps Script на каждый заход незачем. Свежесть
+    этого кэша — забота reread_categories(): она перечитывает справочник в
+    фоне, и снимку остаётся только назвать число."""
     settings = config.load_settings()
     return {
         "owner": (settings.get("owner") or "").strip(),
