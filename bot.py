@@ -6,6 +6,7 @@
 """
 
 import queue
+import sys
 import threading
 import time
 
@@ -315,6 +316,10 @@ def poll_with(env, st, jobs, token):
 
 
 def main():
+    # Иначе при перенаправлении в файл вывод копится в буфере, и ошибки
+    # доходят до лога часами позже — а разбираются по ним именно тогда,
+    # когда что-то сломалось.
+    sys.stdout.reconfigure(line_buffering=True)
     env = config.load_env()
     st = memory.load()
     jobs = queue.Queue()
