@@ -25,6 +25,12 @@
    и MCP) на codex-cli 0.152.1 не воспроизвёлся: прогон с поднятым MCP-сервером
    вернул все поля. Прогон был один — это «не воспроизвёлся», а не «исправлен»,
    и `--ignore-user-config` ниже стоит в том числе поэтому.
+7. На Windows в аргументах не должно быть переносов строк. У Claude Code это
+   поймали живьём: батник идёт через `cmd.exe`, тот обрывает командную строку
+   на первом `\n` и теряет все флаги после него, молча. Здесь промпт с
+   заданием лежит в одном многострочном аргументе — та же болезнь, поэтому он
+   тоже проходит через `one_line()`. Живьём на Windows не проверено: Codex
+   туда ещё не ставили. Схеме это не нужно — `--output-schema` берёт путь.
 """
 
 import json
@@ -32,7 +38,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from engines import EngineError, EngineTimeout, resolve
+from engines import EngineError, EngineTimeout, one_line, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -63,7 +69,9 @@ def run(kind, task, payload):
     дороже, чем оставить."""
     # Промпт у Codex некуда положить отдельно: ни `--append-system-prompt`,
     # ни его подобия здесь нет. Кладём в начало задания.
-    prompt = PROMPT_PATH.read_text(encoding="utf-8") + "\n\n---\n\n" + task
+    prompt = one_line(
+        PROMPT_PATH.read_text(encoding="utf-8") + "\n\n---\n\n" + task
+    )
 
     with tempfile.TemporaryDirectory() as folder:
         answer_path = Path(folder) / "answer.json"
@@ -101,6 +109,11 @@ def run(kind, task, payload):
             done = subprocess.run(
                 command, capture_output=True, text=True, timeout=TIMEOUT,
                 stdin=subprocess.DEVNULL, cwd=folder,
+                # Сам ответ читается ниже из файла с явной кодировкой, так что
+                # данные здесь не портятся. Но stderr без этого приезжает на
+                # русской Windows кракозябрами — и попадает такими в сообщение
+                # об ошибке, то есть ровно туда, где человек ищет объяснение.
+                encoding="utf-8",
             )
         except subprocess.TimeoutExpired:
             raise EngineTimeout(f"движок молчал {TIMEOUT} секунд")

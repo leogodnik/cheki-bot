@@ -10,13 +10,18 @@
    отвечает «--json-schema is not valid JSON».
 3. Фотографии разбираем на sonnet. На мятом чеке haiku в одном прогоне из
    четырёх прочитал 20.08 как 20.09 — и поставил себе высокую уверенность.
+4. На Windows в аргументах не должно быть переносов строк: там `claude` —
+   батник, батник идёт через `cmd.exe`, а тот обрывает командную строку на
+   первом же `\n` и молча теряет все флаги после него. Поэтому задание и
+   промпт проходят через `one_line()`, а схема пересобирается в одну строку.
+   Подробности — в docstring `one_line()` в `engines/__init__.py`.
 """
 
 import json
 import subprocess
 from pathlib import Path
 
-from engines import EngineError, EngineTimeout, resolve
+from engines import EngineError, EngineTimeout, one_line, resolve
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROMPT_PATH = BASE_DIR / "prompt.md"
@@ -52,11 +57,18 @@ def run(kind, task, payload=None):
             "не нашёл claude — проверьте, что Claude Code установлен и "
             "виден в PATH (запустите claude --version)"
         )
+    # Схема читается не текстом файла, а через json: в файле переносы строк
+    # стоят для читаемости человеком, а json.dumps собирает тот же самый JSON
+    # в одну строку. Для CLI это ровно та же схема, для Windows — аргумент без
+    # единого `\n`.
+    schema = json.dumps(
+        json.loads(SCHEMA_PATH.read_text(encoding="utf-8")), ensure_ascii=False
+    )
     command = [
         program,
-        "-p", task,
-        "--append-system-prompt", PROMPT_PATH.read_text(encoding="utf-8"),
-        "--json-schema", SCHEMA_PATH.read_text(encoding="utf-8"),
+        "-p", one_line(task),
+        "--append-system-prompt", one_line(PROMPT_PATH.read_text(encoding="utf-8")),
+        "--json-schema", schema,
         "--output-format", "json",
         "--model", MODELS[kind],
         "--allowedTools", "Read",
@@ -64,7 +76,13 @@ def run(kind, task, payload=None):
     ]
     try:
         done = subprocess.run(
-            command, capture_output=True, text=True, timeout=TIMEOUT, cwd=BASE_DIR
+            command, capture_output=True, text=True, timeout=TIMEOUT,
+            cwd=BASE_DIR,
+            # Кодировка явная, и это не перестраховка. Без неё Python
+            # раскодирует ответ движка в кодировке консоли, а на русской
+            # Windows это не UTF-8: «расход» приезжает как «СЂР°СЃС…РѕРґ» и
+            # уходит таким в таблицу. На маке ничего не меняет.
+            encoding="utf-8",
         )
     except subprocess.TimeoutExpired:
         raise EngineTimeout(f"движок молчал {TIMEOUT} секунд")
